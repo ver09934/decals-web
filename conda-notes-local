@@ -1,0 +1,78 @@
+Attempting to get the viewer running in a Debian VM.
+
+Base setup
+----------
+Debian 10 netinstall w/ xfce
+sudo apt install vim htop tree git tmux locate gcc make perl dkms linux-headers-4.19.0-5-all
+cd && git clone https://github.com/ver09934/decals-web.git
+
+Conda setup
+-----------
+Install anaconda3 to ~/anaconda3
+conda create --name decals-web python=3
+Installer runs "conda init" to put conda activation in .bashrc
+Add "conda activate decals-web" to .bashrc
+Update conda: "conda update -n base -c defaults conda"
+To create a backup environment at any time: conda create --name decals-web-clone --clone decals-web
+To remove the old backup: conda env remove --name decals-web-clone
+
+Install dependencies in Conda env
+---------------------------------
+pip install django
+pip install numpy
+pip install scipy
+pip install matplotlib
+# pip install fitsio
+pip install psycopg2 --> need "sudo apt install libpq-dev"
+pip install astropy
+pip install pillow
+# pip install uwsgi --> need "sudo apt install libssl-dev", still fails
+conda config --append channels conda-forge && conda install uwsgi
+conda install swig 
+
+pip install --no-deps --upgrade git+https://github.com/esheldon/fitsio.git#egg=fitsio
+
+cd ~/Downloads
+# check that conda prefix is set: echo $CONDA_PREFIX
+wget ftp://ftp.atnf.csiro.au/pub/software/wcslib/wcslib.tar.bz2
+tar xjf wcslib.tar.bz2
+mv wcslib-* wcslib && cd wcslib
+./configure --prefix=$CONDA_PREFIX
+make
+make install
+cd ..
+
+# See http://astrometry.net/doc/build.html for build info
+
+export PKG_CONFIG_PATH=$CONDA_PREFIX/lib/pkgconfig
+
+# Install astrometry.net dependencies:
+# (python-pyfits --> astropy-utils)
+sudo apt install libcairo2-dev libnetpbm10-dev netpbm libpng-dev libjpeg-dev python-numpy astropy-utils python-dev zlib1g-dev libbz2-dev swig libcfitsio-dev
+
+cd ~/Downloads
+git clone https://github.com/dstndstn/astrometry.net.git   
+cd astrometry.net
+make -k
+make -k py
+make -k extra
+make install INSTALL_DIR=$CONDA_PREFIX
+python setup.py install --prefix=$CONDA_PREFIX
+cd ..
+
+# See https://github.com/dstndstn/tractor for build info
+# TODO: Needs numpy >= 1.4, but conda is ~1.16?
+conda install cython # seems like tractor might need it?
+conda install emcee
+conda install matplotlib
+cd ~/Downloads
+git clone https://github.com/dstndstn/tractor.git 
+cd tractor
+make && make all
+python setup.py install --prefix=$CONDA_PREFIX
+
+# Not really sure what's happening with this one...
+cd ~/Downloads
+git clone https://github.com/legacysurvey/legacypipe.git
+make && make all && make install INSTALL_DIR=$CONDA_PREFIX WORKING_DIR=~/Downloads/legacypipe # Not sure this did anything much...
+python setup.py install --prefix=$CONDA_PREFIX
