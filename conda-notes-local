@@ -133,3 +133,7 @@ Reading image from /home/ian/decals-web/data/decals-dr7/coadd/228/2283p055/legac
 New
 ---
 conda install pillow
+NOTE: For the error where "Range cannot be empty (low >= high) unless no samples are taken":
+    - There seems to be an error in some randint method that chooses a random galaxy
+    - So, just specify coords to go to, like:
+    - http://localhost:8000/viewer?ra=228.3771&dec=5.4232&zoom=14&layer=decals-dr7
