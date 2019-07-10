@@ -87,3 +87,45 @@ It runs! Kind of...
 cd ~/anaconda3/envs/decals-web/lib/python3.7/site-packages/astrometry/catalogs
 ln -s ~/Downloads/astrometry.net/catalogs/ngc2000.fits ngc2000.fits
 ln -s ~/Downloads/astrometry.net/catalogs/ic2000.fits ic2000.fits
+
+What seems to be happening...
+-----------------------------
+- If you give the VM an internet connection, the viewer runs (mostly) fine (obviously missing some files, etc.)
+    - It appears to be using the legacysurvey.org pre-rendered tiles and cutout server
+- If you don't give the VM an internet connection, the viewer loads, but no images loads
+    - Using "httpry", seems like the viewer is still attempting to query legacysurvey.org
+    - Probably just some settings problem w/ domain names, using "legacysurvey.org" instead of "localhost" somewhere
+- However, if one queries the local cutout server, it looks locally (in data/) for the coadd files
+
+To get the cutout server running
+--------------------------------
+- Create a cutout server test URL, something like this:
+    - http://localhost:8000/jpeg-cutout?ra=228.3771&dec=5.4232&zoom=14&layer=decals-dr7
+    - With the dnango server running, request the image using a web browser
+- Watch the django output, it will look something like this:
+
+get_layer: name "decals-dr7"
+get_layer: decals-dr7 -- generic
+Survey name decals-dr7
+layer: <map.views.ReDecalsLayer object at 0x7fcc5089ee48>
+Request has zoom= 14 : setting pixscale= 0.262
+RA,Dec bounds of WCS: 228.36777911047557 228.38642088952446 5.413920833413364 5.432479166584441
+checking for cache fn /home/ian/decals-web/data/decals-dr7/extra-images/survey-bricks.fits.gz
+Bricks touching RA,Dec box 228.36777911047557 228.38642088952446 Dec 5.413920833413364 5.432479166584441 scale 0 :  2283p055
+Reading 2283p055 band g scale 0
+checking for cache fn /home/ian/decals-web/data/decals-dr7/extra-images/coadd/228/2283p055/legacysurvey-2283p055-image-g.fits.fz
+Reading 2283p055 band g scale 0 -> fn /home/ian/decals-web/data/decals-dr7/coadd/228/2283p055/legacysurvey-2283p055-image-g.fits.fz
+Reading image from /home/ian/decals-web/data/decals-dr7/coadd/228/2283p055/legacysurvey-2283p055-image-g.fits.fz
+Reading 2283p055 band r scale 0
+checking for cache fn /home/ian/decals-web/data/decals-dr7/extra-images/coadd/228/2283p055/legacysurvey-2283p055-image-r.fits.fz
+Reading 2283p055 band r scale 0 -> fn /home/ian/decals-web/data/decals-dr7/coadd/228/2283p055/legacysurvey-2283p055-image-r.fits.fz
+Reading image from /home/ian/decals-web/data/decals-dr7/coadd/228/2283p055/legacysurvey-2283p055-image-r.fits.fz
+Reading 2283p055 band z scale 0
+checking for cache fn /home/ian/decals-web/data/decals-dr7/extra-images/coadd/228/2283p055/legacysurvey-2283p055-image-z.fits.fz
+Reading 2283p055 band z scale 0 -> fn /home/ian/decals-web/data/decals-dr7/coadd/228/2283p055/legacysurvey-2283p055-image-z.fits.fz
+Reading image from /home/ian/decals-web/data/decals-dr7/coadd/228/2283p055/legacysurvey-2283p055-image-z.fits.fz
+[10/Jul/2019 15:04:09] "GET /jpeg-cutout?ra=228.3771&dec=5.4232&zoom=14&layer=decals-dr7 HTTP/1.1" 200 21251
+
+- Get the files it is looking for from https://portal.nersc.gov/project/cosmo/data/legacysurvey/dr7/
+- Put the files in the path that django is looking for...
+- A cutout jpeg image should be generated and displayed in the browser
