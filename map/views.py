@@ -1250,7 +1250,7 @@ class MapLayer(object):
         from astrometry.util.util import Tan
         import numpy as np
         import fitsio
-    
+
         if wcs is None:
             wcs, W, H, zoomscale, zoom,x,y = get_tile_wcs(zoom, x, y)
 
@@ -1288,6 +1288,19 @@ class MapLayer(object):
     
         if get_images:
             return rimgs
+
+        # -------------------------------------------------------------------------
+
+        from PIL import Image, ImageDraw
+        img = Image.open(tilefn)
+
+        draw = ImageDraw.Draw(img)
+        draw.line((img.size[0]/2, 0, img.size[0]/2, img.size[1]), fill=(0, 0, 255), width=3)
+        draw.line((0, img.size[1]/2, img.size[0], img.size[1]/2), fill=(0, 0, 255), width=3)
+
+        img.save(tilefn)
+
+        # -------------------------------------------------------------------------
     
         return send_file(tilefn, 'image/jpeg', unlink=(not savecache),
                          filename=filename)
