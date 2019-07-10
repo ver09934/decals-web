@@ -83,3 +83,7 @@ cd ..
 python3 manage.py runserver
 ... some other random file changes later ...
 It runs! Kind of...
+
+cd ~/anaconda3/envs/decals-web/lib/python3.7/site-packages/astrometry/catalogs
+ln -s ~/Downloads/astrometry.net/catalogs/ngc2000.fits ngc2000.fits
+ln -s ~/Downloads/astrometry.net/catalogs/ic2000.fits ic2000.fits
