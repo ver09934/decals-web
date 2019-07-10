@@ -147,3 +147,5 @@ More investigating:
             - Question: Is it centers within the bounds, or ellipse diameters within the bounds (hopefully latter)
 
 NOTE: The get_cutout method at ~line 1330 looks useful...
+
+conda install requests

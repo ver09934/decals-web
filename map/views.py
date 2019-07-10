@@ -1211,6 +1211,9 @@ class MapLayer(object):
                  filename=None,
                  bands=None,
                  tempfiles=None,
+                 ra=None,
+                 dec=None,
+                 pixscale=None
                 ):
         '''
         *filename*: filename returned in http response
@@ -1289,18 +1292,57 @@ class MapLayer(object):
         if get_images:
             return rimgs
 
-        # -------------------------------------------------------------------------
+        # -----------------------------------------------------------------------------------
+        if ra is not None and dec is not None and pixscale is not None:
+        
+            from PIL import Image, ImageDraw
+            img = Image.open(tilefn)
+            draw = ImageDraw.Draw(img)
+            
+            width, height = img.size
 
-        from PIL import Image, ImageDraw
-        img = Image.open(tilefn)
+            # pixscale is arcseconds/pixel
+            # ra is 360 degrees around
+            # dec is -90 to 90
 
-        draw = ImageDraw.Draw(img)
-        draw.line((img.size[0]/2, 0, img.size[0]/2, img.size[1]), fill=(0, 0, 255), width=3)
-        draw.line((0, img.size[1]/2, img.size[0], img.size[1]/2), fill=(0, 0, 255), width=3)
+            # width
+            ralo = ra - ((width / 2) * pixscale / 3600)
+            rahi = ra + ((width / 2) * pixscale / 3600)
+            # height
+            declo = dec - ((height / 2) * pixscale / 3600)
+            dechi = dec + ((height / 2) * pixscale / 3600)
 
-        img.save(tilefn)
+            import requests
+            json_url = 'http://legacysurvey.org/viewer/lslga/1/cat.json?ralo={}&rahi={}&declo={}&dechi={}'.format(ralo, rahi, declo, dechi)
+            r = requests.get(json_url)
+            r = r.json()
+            
+            # print(r)
+            # print(r[0])
 
-        # -------------------------------------------------------------------------
+            # print('-----------------------------------------------------------')
+            
+            for rd in r['rd']:
+                ra, dec = rd
+
+                horiz_pix_from_left = (rahi - ra) * 3600 / pixscale
+                vert_pix_from_top = (dechi - dec) * 3600 / pixscale
+
+                horiz_pix_from_left = int(horiz_pix_from_left)
+                vert_pix_from_top = int(vert_pix_from_top)
+
+                tmp_rad = 5
+                box = (
+                    horiz_pix_from_left - tmp_rad,
+                    vert_pix_from_top - tmp_rad,
+                    horiz_pix_from_left + tmp_rad,
+                    vert_pix_from_top + tmp_rad
+                )
+                draw.ellipse(box, fill=(0, 255, 0), outline=None, width=0)
+
+            img.save(tilefn)
+
+        # -----------------------------------------------------------------------------------
     
         return send_file(tilefn, 'image/jpeg', unlink=(not savecache),
                          filename=filename)
@@ -1440,7 +1482,7 @@ class MapLayer(object):
         zoom = max(0, min(zoom, 16))
 
         rtn = self.get_tile(req, None, zoom, 0, 0, wcs=wcs, get_images=fits,
-                             savecache=False, bands=bands, tempfiles=tempfiles)
+                             savecache=False, bands=bands, tempfiles=tempfiles, ra=ra, dec=dec, pixscale=pixscale)
         if jpeg:
             return rtn
         ims = rtn
