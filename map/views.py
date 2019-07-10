@@ -1297,7 +1297,7 @@ class MapLayer(object):
         
             from PIL import Image, ImageDraw
             img = Image.open(tilefn)
-            draw = ImageDraw.Draw(img)
+            # img_draw = ImageDraw.Draw(img)
             
             width, height = img.size
 
@@ -1317,28 +1317,65 @@ class MapLayer(object):
             r = requests.get(json_url)
             r = r.json()
             
+            # print('-----------------------------------------------------------')
             # print(r)
             # print(r[0])
-
             # print('-----------------------------------------------------------')
-            
-            for rd in r['rd']:
-                ra, dec = rd
 
-                horiz_pix_from_left = (rahi - ra) * 3600 / pixscale
-                vert_pix_from_top = (dechi - dec) * 3600 / pixscale
+            '''
+            for i in range(len(r['rd'])):
+                PA = r['posAngle'][i]
+                PA = 360 + PA if PA < 0 else PA
+                PA = np.round(PA, 4)
+                print(PA)
+            '''
 
-                horiz_pix_from_left = int(horiz_pix_from_left)
-                vert_pix_from_top = int(vert_pix_from_top)
+            # TODO: Figure out how to do this more properly
+            for i in range(len(r['rd'])):
+                RA, DEC = r['rd'][i]
+                D25 = r['radiusArcsec'][i]
+                BA = r['abRatio'][i]
+                PA = r['posAngle'][i]
 
-                tmp_rad = 5
-                box = (
-                    horiz_pix_from_left - tmp_rad,
-                    vert_pix_from_top - tmp_rad,
-                    horiz_pix_from_left + tmp_rad,
-                    vert_pix_from_top + tmp_rad
-                )
-                draw.ellipse(box, fill=(0, 255, 0), outline=None, width=0)
+                # http://legacysurvey.org/viewer/lslga/1/cat.json?ralo=228.36846888888888&rahi=228.40573111111112&declo=5.415868888888888&dechi=5.453131111111111
+
+                # PA = 360 + PA if PA < 0 else PA
+                # PA = PA - 180 if PA > 180 else PA
+                # PA = np.round(PA, 4)
+
+                # PA = PA/2
+
+                # TODO: Check the JSON file numbers against the LSLGA catalog for:
+                    # BA (whether it should be A/B or B/A)
+                    # PA
+                # TODO: Just check how the javascript renders the ellipses! (Will probably require reading the js map lib docs)
+
+                major_axis_arcsec = D25 * 2
+                minor_axis_arcsec = major_axis_arcsec * BA
+
+                major_axis_pix = major_axis_arcsec / pixscale
+                minor_axis_pix = minor_axis_arcsec / pixscale
+
+                overlay_width = int(minor_axis_pix)
+                overlay_height = int(major_axis_pix)
+
+                overlay = Image.new('RGBA', (overlay_width, overlay_height))
+                draw = ImageDraw.ImageDraw(overlay)
+                box_corners = (0, 0, overlay_width, overlay_height)
+                draw.ellipse(box_corners, fill=None, outline=(0, 0, 255), width=3)
+
+                rotated = overlay.rotate(PA, expand=True)
+
+                rotated_width = rotated.size[0]
+                rotated_height = rotated.size[1]
+
+                horiz_pix_from_left = (rahi - RA) * 3600 / pixscale
+                vert_pix_from_top = (dechi - DEC) * 3600 / pixscale
+
+                paste_shift_x = int(horiz_pix_from_left - rotated_width/2)
+                paste_shift_y = int(vert_pix_from_top - rotated_height/2)
+
+                img.paste(rotated, (paste_shift_x, paste_shift_y), rotated)
 
             img.save(tilefn)
 
