@@ -76,3 +76,9 @@ cd ~/Downloads
 git clone https://github.com/legacysurvey/legacypipe.git
 make && make all && make install INSTALL_DIR=$CONDA_PREFIX WORKING_DIR=~/Downloads/legacypipe # Not sure this did anything much...
 python setup.py install --prefix=$CONDA_PREFIX
+
+cd ~/decals-web/viewer
+cp settings_test.py settings.py
+cd ..
+python3 manage.py runserver
+... some other random file changes later ...
