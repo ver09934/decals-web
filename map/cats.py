@@ -322,6 +322,7 @@ def get_random_galaxy(layer=None):
     else:
         galfn = os.path.join(settings.DATA_DIR, 'galaxies-in-dr8.fits')
 
+    drnum = 4
 
     if (not layer in galaxycats) and not os.path.exists(galfn):
         if settings.CREATE_GALAXY_CATALOG:
