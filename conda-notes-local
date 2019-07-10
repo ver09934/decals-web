@@ -137,3 +137,13 @@ NOTE: For the error where "Range cannot be empty (low >= high) unless no samples
     - There seems to be an error in some randint method that chooses a random galaxy
     - So, just specify coords to go to, like:
     - http://localhost:8000/viewer?ra=228.3771&dec=5.4232&zoom=14&layer=decals-dr7
+
+More investigating:
+- When the LSLGA map layer is turned on (on legacysurvey.org):
+    - the viewer makes a request to (determined using httpry):
+        - http://legacysurvey.org/viewer/lslga/1/cat.json?ralo=149.9854&rahi=150.4509&declo=55.5582&dechi=55.6784
+        - Gives the ra/dec boundaries for the current frame
+        - Returns a JSON file with (as far as I can tell) all the LSLGA galaxies within the bounds
+            - Question: Is it centers within the bounds, or ellipse diameters within the bounds (hopefully latter)
+
+NOTE: The get_cutout method at ~line 1330 looks useful...
