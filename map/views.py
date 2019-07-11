@@ -1293,22 +1293,16 @@ class MapLayer(object):
             return rimgs
 
         # -----------------------------------------------------------------------------------
+
         if ra is not None and dec is not None and pixscale is not None:
         
             from PIL import Image, ImageDraw
             img = Image.open(tilefn)
-            # img_draw = ImageDraw.Draw(img)
             
             width, height = img.size
 
-            # pixscale is arcseconds/pixel
-            # ra is 360 degrees around
-            # dec is -90 to 90
-
-            # width
             ralo = ra - ((width / 2) * pixscale / 3600)
             rahi = ra + ((width / 2) * pixscale / 3600)
-            # height
             declo = dec - ((height / 2) * pixscale / 3600)
             dechi = dec + ((height / 2) * pixscale / 3600)
 
@@ -1316,48 +1310,18 @@ class MapLayer(object):
             json_url = 'http://legacysurvey.org/viewer/lslga/1/cat.json?ralo={}&rahi={}&declo={}&dechi={}'.format(ralo, rahi, declo, dechi)
             r = requests.get(json_url)
             r = r.json()
-            
-            # print('-----------------------------------------------------------')
-            # print(r)
-            # print(r[0])
-            # print('-----------------------------------------------------------')
 
-            '''
             for i in range(len(r['rd'])):
-                PA = r['posAngle'][i]
-                PA = 360 + PA if PA < 0 else PA
-                PA = np.round(PA, 4)
-                print(PA)
-            '''
 
-            # TODO: Figure out how to do this more properly
-            for i in range(len(r['rd'])):
                 RA, DEC = r['rd'][i]
-                D25 = r['radiusArcsec'][i]
-                BA = r['abRatio'][i]
+                RAD = r['radiusArcsec'][i]
+                AB = r['abRatio'][i]
                 PA = r['posAngle'][i]
-
-                # http://legacysurvey.org/viewer/lslga/1/cat.json?ralo=228.36846888888888&rahi=228.40573111111112&declo=5.415868888888888&dechi=5.453131111111111
-
-                # PA = 360 + PA if PA < 0 else PA
-                # PA = PA - 180 if PA > 180 else PA
-                # PA = np.round(PA, 4)
-
-                # PA = PA/2
-
-                # TODO: Check the JSON file numbers against the LSLGA catalog for:
-                    # BA (whether it should be A/B or B/A)
-                    # PA
-                # TODO: Just check how the javascript renders the ellipses! (Will probably require reading the js map lib docs)
-
-                # In LSLGA catalog --> deviation of major axis from vertical, ccw is positive, all angles positive, range 0 to 180
-                # In legacysurvey cat.json --> deviation of (major axis?) from horizontal left, cw is positive, range -90 to 90
-                # The two angles seem to always sum to 90
 
                 PA = 90 - PA
 
-                major_axis_arcsec = D25 * 2
-                minor_axis_arcsec = major_axis_arcsec * BA
+                major_axis_arcsec = RAD * 2
+                minor_axis_arcsec = major_axis_arcsec * AB
 
                 major_axis_pix = major_axis_arcsec / pixscale
                 minor_axis_pix = minor_axis_arcsec / pixscale
