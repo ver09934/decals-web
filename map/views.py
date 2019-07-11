@@ -1350,6 +1350,12 @@ class MapLayer(object):
                     # PA
                 # TODO: Just check how the javascript renders the ellipses! (Will probably require reading the js map lib docs)
 
+                # In LSLGA catalog --> deviation of major axis from vertical, ccw is positive, all angles positive, range 0 to 180
+                # In legacysurvey cat.json --> deviation of (major axis?) from horizontal left, cw is positive, range -90 to 90
+                # The two angles seem to always sum to 90
+
+                PA = 90 - PA
+
                 major_axis_arcsec = D25 * 2
                 minor_axis_arcsec = major_axis_arcsec * BA
 
