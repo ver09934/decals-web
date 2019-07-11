@@ -88,6 +88,10 @@ cd ~/anaconda3/envs/decals-web/lib/python3.7/site-packages/astrometry/catalogs
 ln -s ~/Downloads/astrometry.net/catalogs/ngc2000.fits ngc2000.fits
 ln -s ~/Downloads/astrometry.net/catalogs/ic2000.fits ic2000.fits
 
+cd ~/decals-web
+mkdir -p data/decals-dr7 && cd data/decals-dr7
+wget https://portal.nersc.gov/project/cosmo/data/legacysurvey/dr7/survey-bricks.fits.gz
+
 What seems to be happening...
 -----------------------------
 - If you give the VM an internet connection, the viewer runs (mostly) fine (obviously missing some files, etc.)
@@ -128,6 +132,7 @@ Reading image from /home/ian/decals-web/data/decals-dr7/coadd/228/2283p055/legac
 
 - Get the files it is looking for from https://portal.nersc.gov/project/cosmo/data/legacysurvey/dr7/
 - Put the files in the path that django is looking for...
+    - For example, ~/decals-web/data/decals-dr7/coadd/228/2283p055/legacysurvey-2283p055-image-{g, r, z}.fits.fz
 - A cutout jpeg image should be generated and displayed in the browser
 
 New

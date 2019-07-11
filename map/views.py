@@ -1308,8 +1308,7 @@ class MapLayer(object):
 
             import requests
             json_url = 'http://legacysurvey.org/viewer/lslga/1/cat.json?ralo={}&rahi={}&declo={}&dechi={}'.format(ralo, rahi, declo, dechi)
-            r = requests.get(json_url)
-            r = r.json()
+            r = requests.get(json_url).json()
 
             for i in range(len(r['rd'])):
 
