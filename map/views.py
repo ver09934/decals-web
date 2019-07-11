@@ -1323,11 +1323,8 @@ class MapLayer(object):
                 major_axis_arcsec = RAD * 2
                 minor_axis_arcsec = major_axis_arcsec * AB
 
-                major_axis_pix = major_axis_arcsec / pixscale
-                minor_axis_pix = minor_axis_arcsec / pixscale
-
-                overlay_width = int(minor_axis_pix)
-                overlay_height = int(major_axis_pix)
+                overlay_height = int(major_axis_arcsec / pixscale)
+                overlay_width = int(minor_axis_arcsec / pixscale)
 
                 overlay = Image.new('RGBA', (overlay_width, overlay_height))
                 draw = ImageDraw.ImageDraw(overlay)
@@ -1335,15 +1332,13 @@ class MapLayer(object):
                 draw.ellipse(box_corners, fill=None, outline=(0, 0, 255), width=3)
 
                 rotated = overlay.rotate(PA, expand=True)
+                rotated_width, rotated_height = rotated.size
 
-                rotated_width = rotated.size[0]
-                rotated_height = rotated.size[1]
+                pix_from_left = (rahi - RA) * 3600 / pixscale
+                pix_from_top = (dechi - DEC) * 3600 / pixscale
 
-                horiz_pix_from_left = (rahi - RA) * 3600 / pixscale
-                vert_pix_from_top = (dechi - DEC) * 3600 / pixscale
-
-                paste_shift_x = int(horiz_pix_from_left - rotated_width/2)
-                paste_shift_y = int(vert_pix_from_top - rotated_height/2)
+                paste_shift_x = int(pix_from_left - rotated_width / 2)
+                paste_shift_y = int(pix_from_top - rotated_height / 2)
 
                 img.paste(rotated, (paste_shift_x, paste_shift_y), rotated)
 
