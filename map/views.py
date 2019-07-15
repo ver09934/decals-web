@@ -1211,9 +1211,6 @@ class MapLayer(object):
                  filename=None,
                  bands=None,
                  tempfiles=None,
-                 ra=None,
-                 dec=None,
-                 pixscale=None
                 ):
         '''
         *filename*: filename returned in http response
@@ -1292,20 +1289,23 @@ class MapLayer(object):
         if get_images:
             return rimgs
 
-        print("-----------------------------------------")
-        print(req.GET.keys())
-        print("-----------------------------------------")
-
-        # lslga = req.GET.get("lslga", None)
-
-        lslga = "lslga" in req.GET.keys()
-
         # -----------------------------------------------------------------------------------
 
-        if lslga and ra is not None and dec is not None and pixscale is not None:
+        print("-"*40)
+        print(req.GET.keys())
+        print("-"*40)
+        
+        # lslga = req.GET.get("lslga", None)
+        lslga = "lslga" in req.GET.keys()
+
+        if lslga:
         
             from PIL import Image, ImageDraw
             img = Image.open(tilefn)
+
+            ra, dec = wcs.crval
+            pixscale = np.abs(wcs.cd[0]) * 3600
+            # np.sqrt(np.abs( wcs.cd[0] * wcs.cd[3] - wcs.cd[1] * wcs.cd[2])) * 3600
             
             width, height = img.size
 
@@ -1491,7 +1491,7 @@ class MapLayer(object):
         zoom = max(0, min(zoom, 16))
 
         rtn = self.get_tile(req, None, zoom, 0, 0, wcs=wcs, get_images=fits,
-                             savecache=False, bands=bands, tempfiles=tempfiles, ra=ra, dec=dec, pixscale=pixscale)
+                             savecache=False, bands=bands, tempfiles=tempfiles)
         if jpeg:
             return rtn
         ims = rtn
