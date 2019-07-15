@@ -1292,9 +1292,17 @@ class MapLayer(object):
         if get_images:
             return rimgs
 
+        print("-----------------------------------------")
+        print(req.GET.keys())
+        print("-----------------------------------------")
+
+        # lslga = req.GET.get("lslga", None)
+
+        lslga = "lslga" in req.GET.keys()
+
         # -----------------------------------------------------------------------------------
 
-        if ra is not None and dec is not None and pixscale is not None:
+        if lslga and ra is not None and dec is not None and pixscale is not None:
         
             from PIL import Image, ImageDraw
             img = Image.open(tilefn)
