@@ -1296,7 +1296,7 @@ class MapLayer(object):
         print("-"*40)
         
         # lslga = req.GET.get("lslga", None)
-        lslga = "lslga" in req.GET.keys()
+        lslga = "lslga" in req.GET
 
         if lslga:
         
