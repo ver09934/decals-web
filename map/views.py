@@ -1290,15 +1290,8 @@ class MapLayer(object):
             return rimgs
 
         # -----------------------------------------------------------------------------------
-
-        print("-"*40)
-        print(req.GET.keys())
-        print("-"*40)
         
-        # lslga = req.GET.get("lslga", None)
-        lslga = "lslga" in req.GET
-
-        if lslga:
+        if "lslga" in req.GET:
         
             from PIL import Image, ImageDraw
             img = Image.open(tilefn)
