@@ -1250,7 +1250,7 @@ class MapLayer(object):
         from astrometry.util.util import Tan
         import numpy as np
         import fitsio
-
+    
         if wcs is None:
             wcs, W, H, zoomscale, zoom,x,y = get_tile_wcs(zoom, x, y)
 
