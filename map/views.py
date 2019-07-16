@@ -1289,17 +1289,14 @@ class MapLayer(object):
         if get_images:
             return rimgs
 
-        # -----------------------------------------------------------------------------------
-        
         if "lslga" in req.GET:
-        
+
             from PIL import Image, ImageDraw
             img = Image.open(tilefn)
 
             ra, dec = wcs.crval
             pixscale = np.abs(wcs.cd[0]) * 3600
-            # np.sqrt(np.abs( wcs.cd[0] * wcs.cd[3] - wcs.cd[1] * wcs.cd[2])) * 3600
-            
+
             width, height = img.size
 
             ralo = ra - ((width / 2) * pixscale / 3600)
@@ -1343,8 +1340,6 @@ class MapLayer(object):
                 img.paste(rotated, (paste_shift_x, paste_shift_y), rotated)
 
             img.save(tilefn)
-
-        # -----------------------------------------------------------------------------------
     
         return send_file(tilefn, 'image/jpeg', unlink=(not savecache),
                          filename=filename)
