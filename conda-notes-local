@@ -134,6 +134,9 @@ Reading image from /home/ian/decals-web/data/decals-dr7/coadd/228/2283p055/legac
 - Put the files in the path that django is looking for...
     - For example, ~/decals-web/data/decals-dr7/coadd/228/2283p055/legacysurvey-2283p055-image-{g, r, z}.fits.fz
 - A cutout jpeg image should be generated and displayed in the browser
+- If the tractor models as well as the images are needed:
+    - cd ~/decals-web/data/decals-dr7/coadd/228/2283p055/
+    - wget https://portal.nersc.gov/project/cosmo/data/legacysurvey/dr7/coadd/228/2283p055/legacysurvey-2283p055-model-{g, r, z}.fits.fz
 
 New
 ---
