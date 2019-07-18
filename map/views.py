@@ -57,6 +57,7 @@ tileversions = {
     'ps1': [1],
     'hsc': [1],
     'hsc2': [1],
+    'hsc-dr2': [1],
     'vlass': [1],
     'sdss2': [1,],
     '2mass': [1],
@@ -1224,7 +1225,7 @@ class MapLayer(object):
         zoomscale = 2.**zoom
         x = int(x)
         y = int(y)
-        if zoom < 0 or x < 0 or y < 0 or x >= zoomscale or y >= zoomscale:
+        if zoom < 0 or x < -1 or y < -1 or x >= zoomscale or y >= zoomscale:
             raise RuntimeError('Invalid zoom,x,y %i,%i,%i' % (zoom,x,y))
 
         if ver is not None:
@@ -1478,7 +1479,9 @@ class MapLayer(object):
         zoom = native_zoom - int(np.round(np.log2(pixscale / native_pixscale)))
         zoom = max(0, min(zoom, 16))
 
-        rtn = self.get_tile(req, None, zoom, 0, 0, wcs=wcs, get_images=fits,
+        xtile = ytile = -1
+
+        rtn = self.get_tile(req, None, zoom, xtile, ytile, wcs=wcs, get_images=fits,
                              savecache=False, bands=bands, tempfiles=tempfiles)
         if jpeg:
             return rtn
@@ -1557,6 +1560,7 @@ class DecalsLayer(MapLayer):
         self.scaleddir = os.path.join(settings.DATA_DIR, 'scaled', self.drname)
 
     def data_for_radec(self, ra, dec):
+        import numpy as np
         survey = self.survey
         bricks = survey.get_bricks()
         I = np.flatnonzero((ra >= bricks.ra1) * (ra < bricks.ra2) *
@@ -1582,8 +1586,7 @@ class DecalsLayer(MapLayer):
             ccds = fits_table(ccdsfn)
             ccds = touchup_ccds(ccds, survey)
             if len(ccds):
-                html.append('<h1>CCDs overlapping brick:</h1>')
-                html.extend(self.ccds_overlapping_html(ccds, ra=ra, dec=dec))
+                html.extend(self.ccds_overlapping_html(ccds, brick=brickname, ra=ra, dec=dec))
             from legacypipe.survey import wcs_for_brick
             brickwcs = wcs_for_brick(brick)
             ok,bx,by = brickwcs.radec2pixelxy(ra, dec)
@@ -1592,7 +1595,6 @@ class DecalsLayer(MapLayer):
                      (by >= ccds.brick_y0) * (by <= ccds.brick_y1))
             print('Cut to', len(ccds), 'CCDs containing RA,Dec point')
             if len(ccds):
-                html.append('<h1>CCDs overlapping RA,Dec:</h1>')
                 html.extend(self.ccds_overlapping_html(ccds, ra=ra, dec=dec))
 
         html.extend(['</body></html>',])
@@ -1612,8 +1614,13 @@ class DecalsLayer(MapLayer):
             ]
         return html
 
-    def ccds_overlapping_html(self, ccds, ra=None, dec=None):
-        return ccds_overlapping_html(ccds, self.name, ra=ra, dec=dec)
+    def ccds_overlapping_html(self, ccds, ra=None, dec=None, brick=None):
+        if brick is not None:
+            html = ['<h1>CCDs overlapping brick:</h1>']
+        elif ra is not None and dec is not None:
+            html = ['<h1>CCDs overlapping RA,Dec:</h1>']
+        html.extend(ccds_overlapping_html(ccds, self.name, ra=ra, dec=dec))
+        return html
     
     def ccds_touching_box(self, north, south, east, west, Nmax=None):
         from astrometry.util.starutil import radectoxyz, xyztoradec, degrees_between
@@ -1969,6 +1976,23 @@ class RebrickedMixin(object):
         
 class Decaps2Layer(DecalsDr3Layer):
 
+    #def ccds_overlapping_html(self, ccds, ra=None, dec=None, brick=None):
+    #    return ''
+
+    def brick_details_body(self, brick):
+        survey = self.survey
+        brickname = brick.brickname
+        html = [
+            '<h1>%s data for brick %s:</h1>' % (survey.drname, brickname),
+            '<p>Brick bounds: RA [%.4f to %.4f], Dec [%.4f to %.4f]</p>' % (brick.ra1, brick.ra2, brick.dec1, brick.dec2),
+            '<ul>',
+            '<li><a href="%s/coadd/%s/%s/legacysurvey-%s-image.jpg">JPEG image</a></li>' % (survey.drurl, brickname[:3], brickname, brickname),
+            '<li><a href="%s/coadd/%s/%s/">Coadded images</a></li>' % (survey.drurl, brickname[:3], brickname),
+            '</ul>',
+            ]
+        return html
+
+
     # Some of the DECaPS2 images do not have WCS headers, so create them based on the brick center.
     def read_wcs(self, brick, band, scale, fn=None):
         if scale > 0:
@@ -2311,7 +2335,7 @@ class LegacySurveySplitLayer(MapLayer):
             if len(ccds) == 0:
                 continue
             html.append('<h1>CCDs overlapping brick:</h1>')
-            html.extend(layer.ccds_overlapping_html(ccds, ra=ra, dec=dec))
+            html.extend(layer.ccds_overlapping_html(ccds, ra=ra, dec=dec, brick=brickname))
             from legacypipe.survey import wcs_for_brick
             brickwcs = wcs_for_brick(brick)
             ok,bx,by = brickwcs.radec2pixelxy(ra, dec)
@@ -2379,13 +2403,16 @@ class LegacySurveySplitLayer(MapLayer):
         
         ## FIXME -- generic WCS
 
-        split = self.tilesplits[zoom]
-        if y < split:
-            return self.top.render_into_wcs(wcs, zoom, x, y,
-                                            general_wcs=general_wcs, **kwargs)
-        if y > split:
-            return self.bottom.render_into_wcs(wcs, zoom, x, y,
-                                               general_wcs=general_wcs, **kwargs)
+        print('render_into_wcs zoom,x,y', zoom,x,y, 'wcs', wcs)
+
+        if y != -1:
+            split = self.tilesplits[zoom]
+            if y < split:
+                return self.top.render_into_wcs(wcs, zoom, x, y,
+                                                general_wcs=general_wcs, **kwargs)
+            if y > split:
+                return self.bottom.render_into_wcs(wcs, zoom, x, y,
+                                                   general_wcs=general_wcs, **kwargs)
 
         # both!
         topims = self.top.render_into_wcs(wcs, zoom, x, y,
@@ -3516,7 +3543,7 @@ class MyLegacySurveyData(LegacySurveyData):
         return super(MyLegacySurveyData, self).find_ccds(expnum=expnum, ccdname=ccdname,
                                                          camera=camera)
 
-class SplitSurveyData(MyLegacySurveyData):
+class SplitSurveyData(LegacySurveyData):
     def __init__(self, north, south):
         super(SplitSurveyData, self).__init__()
         self.north = north
@@ -3547,11 +3574,13 @@ class SplitSurveyData(MyLegacySurveyData):
         print('ccds_touching_wcs: north', n)
         if n is not None:
             n.is_north = np.ones(len(n), bool)
+            n.layer = np.array([self.north.layer] * len(n))
             ns.append(n)
         s = self.south.ccds_touching_wcs(wcs, **kwargs)
         print('ccds_touching_wcs: south', s)
         if s is not None:
             s.is_north = np.zeros(len(s), bool)
+            s.layer = np.array([self.south.layer] * len(s))
             ns.append(s)
         if len(ns) == 0:
             return None
@@ -3612,19 +3641,27 @@ def get_survey(name):
 
     if name == 'decaps':
         survey = Decaps2LegacySurveyData(survey_dir=dirnm)
+        survey.drname = 'DECaPS'
+        survey.drurl = 'https://portal.nersc.gov/project/cosmo/data/decaps/dr1'
 
     elif name == 'ls-dr67':
         north = get_survey('mzls+bass-dr6')
+        north.layer = 'mzls+bass-dr6'
         south = get_survey('decals-dr7')
+        south.layer = 'decals-dr7'
         survey = SplitSurveyData(north, south)
 
     elif name == 'dr8':
         north = get_survey('dr8-north')
+        north.layer = 'dr8-north'
         south = get_survey('dr8-south')
+        south.layer = 'dr8-south'
         survey = SplitSurveyData(north, south)
 
-    elif name in ['decals-dr5', 'decals-dr7', 'mzls+bass-dr4', 'mzls+bass-dr6', 'eboss']:
-        survey = MyLegacySurveyData(survey_dir=dirnm, cache_dir=cachedir)
+    #elif name in [
+    #        #'decals-dr5',
+    #        #'decals-dr7', 'mzls+bass-dr4', 'mzls+bass-dr6', 'eboss']:
+    #    survey = MyLegacySurveyData(survey_dir=dirnm, cache_dir=cachedir)
 
 
     if survey is None and not os.path.exists(dirnm):
@@ -3648,8 +3685,11 @@ def get_survey(name):
         }
 
     n,u = names_urls.get(name, ('',''))
-    survey.drname = n
-    survey.drurl = u
+    if not hasattr(survey, 'drname'):
+        survey.drname = n
+    if not hasattr(survey, 'drurl'):
+        survey.drurl = u
+
     surveys[name] = survey
 
     return survey
@@ -4364,19 +4404,14 @@ def cutouts_common(req, tgz, copsf):
     ccds = []
     for i in range(len(CCDs)):
         c = CCDs[i]
-        try:
-            dim = survey.get_image_object(c)
-            print('Image object:', dim)
-            print('Filename:', dim.imgfn)
-            wcs = dim.get_wcs()
-        except:
-            import traceback
-            traceback.print_exc()
-            
-            wcs = Tan(*[float(x) for x in [
-                c.ra_bore, c.dec_bore, c.crpix1, c.crpix2, c.cd1_1, c.cd1_2,
-                c.cd2_1, c.cd2_2, c.width, c.height]])
-        ok,x,y = wcs.radec2pixelxy(ra, dec)
+
+        dim = survey.get_image_object(c)
+        print('Image object:', dim)
+        print('Filename:', dim.imgfn)
+        #wcs = dim.get_wcs()
+        awcs = survey.get_approx_wcs(c)
+
+        ok,x,y = awcs.radec2pixelxy(ra, dec)
         x = int(np.round(x-1))
         y = int(np.round(y-1))
         if x < -size or x >= c.width+size or y < -size or y >= c.height+size:
@@ -4402,9 +4437,10 @@ def cutouts_common(req, tgz, copsf):
     ccdsx = []
     for i,(ccd,x,y) in enumerate(ccds):
         fn = ccd.image_filename.replace(settings.DATA_DIR + '/', '')
-        theurl = url % (domains[i%len(domains)], layer, int(ccd.expnum), ccd.ccdname.strip()) + '?x=%i&y=%i&size=%i' % (x, y, size*2)
+        ccdlayer = getattr(ccd, 'layer', layer)
+        theurl = url % (domains[i%len(domains)], ccdlayer, int(ccd.expnum), ccd.ccdname.strip()) + '?ra=%.4f&dec=%.4f&size=%i' % (ra, dec, size*2)
         print('CCD columns:', ccd.columns())
-        ccdsx.append(('<br/>'.join(['CCD %s %i %s, %.1f sec (x,y = %i,%i)' % (ccd.filter, ccd.expnum, ccd.ccdname, ccd.exptime, x, y),
+        ccdsx.append(('<br/>'.join(['CCD %s %i %s, %.1f sec (x,y ~ %i,%i)' % (ccd.filter, ccd.expnum, ccd.ccdname, ccd.exptime, x, y),
                                     '<small>(%s [%i])</small>' % (fn, ccd.image_hdu),
                                     '<small>(observed %s @ %s)</small>' % (ccd.date_obs, ccd.ut),
                                     '<small><a href="%s">Look up in JPL Small Bodies database</a></small>' % format_jpl_url(ra, dec, ccd),]),
@@ -4600,32 +4636,53 @@ def cutout_panels(req, layer=None, expnum=None, extname=None):
     import pylab as plt
     import numpy as np
 
-    x = int(req.GET['x'], 10)
-    y = int(req.GET['y'], 10)
+    #x = int(req.GET['x'], 10)
+    #y = int(req.GET['y'], 10)
+
+    ra = float(req.GET['ra'])
+    dec = float(req.GET['dec'])
 
     kind = req.GET.get('kind', 'image')
 
     # half-size in DECam pixels
     size = int(req.GET.get('size', '100'), 10)
     size = min(200, size)
-    size = size // 2
+    #size = size // 2
 
     layer = clean_layer_name(layer)
     layer = layer_to_survey_name(layer)
     survey = get_survey(layer)
+    print('cutout_panels: survey is', survey)
     ccd = _get_ccd(expnum, extname, survey=survey)
     print('CCD:', ccd)
     im = survey.get_image_object(ccd)
     print('Image object:', im)
 
+    wcs = im.get_wcs()
+    ok,x,y = wcs.radec2pixelxy(ra, dec)
+    x = int(x-1)
+    y = int(y-1)
 
     H,W = im.shape
-    slc = (slice(max(0, y-size), min(H, y+size+1)),
-           slice(max(0, x-size), min(W, x+size+1)))
+    x0 = x - size//2
+    y0 = y - size//2
+    x1 = x0 + size
+    y1 = y0 + size
+
+    # Compute padding to add to left/right/top/bottom
+    padleft   = max(0, -x0)
+    padbottom = max(0, -y0)
+    padright  = max(0, x1-W)
+    padtop    = max(0, y1-H)
+
+    slc = (slice(max(0, y0), min(H, y1)),
+           slice(max(0, x0), min(W, x1)))
 
     import tempfile
     f,jpegfn = tempfile.mkstemp(suffix='.jpg')
     os.close(f)
+
+    kwa = dict(cmap='gray', origin='lower')
 
     if kind == 'image':
         tim = im.get_tractor_image(slc=slc, gaussPsf=True, splinesky=True,
@@ -4633,13 +4690,14 @@ def cutout_panels(req, layer=None, expnum=None, extname=None):
         from legacypipe.survey import get_rgb
         rgb = get_rgb([tim.data], [tim.band], mnmx=(-1,100.), arcsinh=1.)
         index = dict(g=2, r=1, z=0)[tim.band]
-        bw = rgb[:,:,index]
-        plt.imsave(jpegfn, bw, vmin=0, vmax=1, cmap='gray', origin='lower')
+        img = rgb[:,:,index]
+        kwa.update(vmin=0, vmax=1)
 
     elif kind == 'weight':
         tim = im.get_tractor_image(slc=slc, gaussPsf=True, splinesky=True,
                                    pixels=False, dq=False, invvar=True, old_calibs_ok=True)
-        plt.imsave(jpegfn, tim.getInvvar(), vmin=0, cmap='gray', origin='lower')
+        img = tim.getInvvar()
+        kwa.update(vmin=0)
 
     elif kind == 'weightedimage':
         tim = im.get_tractor_image(slc=slc, gaussPsf=True, splinesky=True,
@@ -4647,14 +4705,30 @@ def cutout_panels(req, layer=None, expnum=None, extname=None):
         from legacypipe.survey import get_rgb
         rgb = get_rgb([tim.data * (tim.inverr > 0)], [tim.band], mnmx=(-1,100.), arcsinh=1.)
         index = dict(g=2, r=1, z=0)[tim.band]
-        bw = rgb[:,:,index]
-        plt.imsave(jpegfn, bw, vmin=0, vmax=1, cmap='gray', origin='lower')
+        img = rgb[:,:,index]
+        kwa.update(vmin=0, vmax=1)
 
     elif kind == 'dq':
         tim = im.get_tractor_image(slc=slc, gaussPsf=True, splinesky=True,
                                    pixels=False, dq=True, invvar=False, old_calibs_ok=True)
-        plt.imsave(jpegfn, tim.dq, vmin=0, cmap='gray', origin='lower')
+        img = tim.dq
+        kwa.update(vmin=0)
 
+    H,W = img.shape
+    if padleft:
+        img = np.hstack((np.zeros((H, padleft), img.dtype), img))
+        H,W = img.shape
+    if padright:
+        img = np.hstack((img, np.zeros((H, padright), img.dtype)))
+        H,W = img.shape
+    if padtop:
+        img = np.vstack((np.zeros((W, padtop), img.dtype), img))
+        H,W = img.shape
+    if padbottom:
+        img = np.vstack((img, np.zeros((W, padbottom), img.dtype)))
+        H,W = img.shape
+
+    plt.imsave(jpegfn, img, **kwa)
     return send_file(jpegfn, 'image/jpeg', unlink=True)
 
 def image_data(req, survey, ccd):
@@ -5209,7 +5283,16 @@ if __name__ == '__main__':
     #r = c.get('/dr8/1/14/9389/3788.cat.json')
     #r = c.get('/ccds/?ralo=192.2058&rahi=192.7009&declo=19.1607&dechi=19.4216&id=dr8')
     #r = c.get('/exps/?ralo=192.9062&rahi=193.8963&declo=32.1721&dechi=32.6388&id=dr8-south')
-    r = c.get('/data-for-radec/?ra=127.1321&dec=30.4327&layer=dr8')
+    #r = c.get('/data-for-radec/?ra=127.1321&dec=30.4327&layer=dr8')
+    #r = c.get('/cutout.jpg?ra=159.8827&dec=-0.6241&zoom=13&layer=dr8')
+    #r = c.get('/dr8-south/1/12/2277/2055.jpg')
+    r = c.get('/cutouts/?ra=194.5524&dec=26.3962&layer=dr8')
+    #r = c.get('/cutout_panels/dr8/721218/N10/?x=21&y=328&size=100')
+    #r = c.get('/cutout_panels/decals-dr5/634863/N10/?x=1077&y=3758&size=100')
+    #r = c.get('/cutouts/?ra=194.5517&dec=26.3977&layer=decals-dr5')
+    #s = get_survey('decals-dr5')
+    #s.get_ccds()
+    
     print('r:', type(r))
 
     f = open('out.jpg', 'wb')
