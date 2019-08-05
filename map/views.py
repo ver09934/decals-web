@@ -1298,6 +1298,7 @@ class MapLayer(object):
             from PIL import Image, ImageDraw
             img = Image.open(tilefn)
 
+            # TODO: Remove
             print('\n'*2 + '-'*120)
             print(wcs)
             print('-'*120)
@@ -1307,12 +1308,13 @@ class MapLayer(object):
             print('-'*120 + '\n'*2)
 
             ra, dec = wcs.crval
+            img_cx, img_cy = wcs.crpix
             pixscale = wcs.pixel_scale()
 
+            # TODO: Needed? Use img_cx, img_cy instead
             width, height = img.size
 
-            # TODO: Check if should be / np.cos or * np.cos
-
+            # TODO: Check if should be / np.cos or * np.cos, remove unneeded
             ralo = ra - ((width / 2) * pixscale / 3600 / np.cos(np.deg2rad(dec)))
             rahi = ra + ((width / 2) * pixscale / 3600 / np.cos(np.deg2rad(dec)))
             # ralo = ra - ((width / 2) * pixscale / 3600)
@@ -1346,27 +1348,18 @@ class MapLayer(object):
                 rotated = overlay.rotate(PA, expand=True)
                 rotated_width, rotated_height = rotated.size
 
-                # --- TODO ---
+                ellipse_x = img_cx - ((RA - ra) * 3600 / pixscale * np.cos(np.deg2rad(dec)))
+                ellipse_y = img_cy - ((DEC - dec) * 3600 / pixscale)
 
-                image_center_ra, image_center_dec = wcs.crval
-                image_center_x, image_center_y = wcs.crpix
-                pixscale = wcs.pixel_scale()
-
-                ellipse_center_x = image_center_x - ((RA - image_center_ra) * 3600 / pixscale * np.cos(np.deg2rad(dec)))
-                ellipse_center_y = image_center_y - ((DEC - image_center_dec) * 3600 / pixscale)
-
-                # TMP - draw center of ellipse
-                elrad = 2
-                elc = (ellipse_center_x - elrad, ellipse_center_y - elrad, ellipse_center_x + elrad, ellipse_center_y + elrad)
-                draw_tmp = ImageDraw.Draw(img)
-                draw_tmp.ellipse(elc, fill = '#ff0000', outline ='#ff0000')
-
-                # ------------------------
-
-                paste_shift_x = int(ellipse_center_x - rotated_width / 2)
-                paste_shift_y = int(ellipse_center_y - rotated_height / 2)
+                paste_shift_x = int(ellipse_x - rotated_width / 2)
+                paste_shift_y = int(ellipse_y - rotated_height / 2)
 
                 img.paste(rotated, (paste_shift_x, paste_shift_y), rotated)
+
+                # TODO: Remove this test
+                elc = (ellipse_x - 2, ellipse_y - 2, ellipse_x + 2, ellipse_y + 2)
+                draw_tmp = ImageDraw.Draw(img)
+                draw_tmp.ellipse(elc, fill = '#ff0000', outline ='#ff0000')
 
             img.save(tilefn)
     
