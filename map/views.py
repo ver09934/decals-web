@@ -632,6 +632,9 @@ class MapLayer(object):
         self.tiledir = os.path.join(settings.DATA_DIR, 'tiles', self.name)
         self.scaleddir = os.path.join(settings.DATA_DIR, 'scaled', self.name)
 
+    def has_cutouts(self):
+        return False
+
     def data_for_radec(self, ra, dec):
         pass
         
@@ -1296,27 +1299,24 @@ class MapLayer(object):
             img = Image.open(tilefn)
 
             ra, dec = wcs.crval
-            pixscale = np.abs(wcs.cd[0]) * 3600
+            pixscale = wcs.pixel_scale()
 
             width, height = img.size
 
-            ralo = ra - ((width / 2) * pixscale / 3600)
-            rahi = ra + ((width / 2) * pixscale / 3600)
+            ralo = ra - ((width / 2) * pixscale / 3600 / np.cos(np.deg2rad(dec)))
+            rahi = ra + ((width / 2) * pixscale / 3600 / np.cos(np.deg2rad(dec)))
             declo = dec - ((height / 2) * pixscale / 3600)
             dechi = dec + ((height / 2) * pixscale / 3600)
 
-            import requests
-            json_url = 'http://legacysurvey.org/viewer/lslga/1/cat.json?ralo={}&rahi={}&declo={}&dechi={}'.format(ralo, rahi, declo, dechi)
-            r = requests.get(json_url).json()
+            from map.cats import query_lslga_radecbox
+            galaxies = query_lslga_radecbox(ralo, rahi, declo, dechi)
 
-            for i in range(len(r['rd'])):
+            for r in galaxies:
 
-                RA, DEC = r['rd'][i]
-                RAD = r['radiusArcsec'][i]
-                AB = r['abRatio'][i]
-                PA = r['posAngle'][i]
-
-                PA = 90 - PA
+                RA, DEC = r.ra, r.dec
+                RAD = r.radius_arcsec
+                AB = r.ba
+                PA = r.pa
 
                 major_axis_arcsec = RAD * 2
                 minor_axis_arcsec = major_axis_arcsec * AB
@@ -1327,7 +1327,8 @@ class MapLayer(object):
                 overlay = Image.new('RGBA', (overlay_width, overlay_height))
                 draw = ImageDraw.ImageDraw(overlay)
                 box_corners = (0, 0, overlay_width, overlay_height)
-                draw.ellipse(box_corners, fill=None, outline=(0, 0, 255), width=3)
+                ellipse_color = '#' + req.GET.get('lslgacolor', '#3388ff').lstrip('#')
+                draw.ellipse(box_corners, fill=None, outline=ellipse_color, width=3)
 
                 rotated = overlay.rotate(PA, expand=True)
                 rotated_width, rotated_height = rotated.size
@@ -1558,6 +1559,9 @@ class DecalsLayer(MapLayer):
 
         self.basedir = os.path.join(settings.DATA_DIR, self.drname)
         self.scaleddir = os.path.join(settings.DATA_DIR, 'scaled', self.drname)
+
+    def has_cutouts(self):
+        return True
 
     def data_for_radec(self, ra, dec):
         import numpy as np
@@ -2304,6 +2308,9 @@ class LegacySurveySplitLayer(MapLayer):
             #print('Decs', dd)
             self.tilesplits[zoom] = y
 
+    def has_cutouts(self):
+        return True
+
     def data_for_radec(self, ra, dec):
         import numpy as np
         html = [
@@ -2334,7 +2341,6 @@ class LegacySurveySplitLayer(MapLayer):
             ccds = touchup_ccds(ccds, survey)
             if len(ccds) == 0:
                 continue
-            html.append('<h1>CCDs overlapping brick:</h1>')
             html.extend(layer.ccds_overlapping_html(ccds, ra=ra, dec=dec, brick=brickname))
             from legacypipe.survey import wcs_for_brick
             brickwcs = wcs_for_brick(brick)
@@ -2344,7 +2350,6 @@ class LegacySurveySplitLayer(MapLayer):
                      (by >= ccds.brick_y0) * (by <= ccds.brick_y1))
             print('Cut to', len(ccds), 'CCDs containing RA,Dec point')
             if len(ccds):
-                html.append('<h1>CCDs overlapping RA,Dec:</h1>')
                 html.extend(layer.ccds_overlapping_html(ccds, ra=ra, dec=dec))
 
         html.extend(['</body></html>',])
@@ -2426,9 +2431,11 @@ class LegacySurveySplitLayer(MapLayer):
             return topims
 
         import numpy as np
-        x = np.empty(256)
-        x[:] = 128.5
-        y = np.arange(1, 256+1)
+        # Compute Decs for each Y in the WCS -- this is assuming that the WCS is axis-aligned!!
+        H,W = wcs.shape
+        x = np.empty(H)
+        x[:] = W//2 + 0.5
+        y = np.arange(1, H+1)
         rr,dd = wcs.pixelxy2radec(x, y)[-2:]
         I = np.flatnonzero(dd >= self.decsplit)
         for b,t in zip(botims, topims):
@@ -2468,6 +2475,9 @@ class DesLayer(ReDecalsLayer):
         super(DesLayer, self).__init__(name, 'image', None)
         self.bricks = None
         self.dir = os.path.join(settings.DATA_DIR, name)
+
+    def has_cutouts(self):
+        return False
 
     def get_base_filename(self, brick, band, **kwargs):
         from glob import glob
@@ -2523,6 +2533,35 @@ class DesLayer(ReDecalsLayer):
         if scale == 0:
             img /= 10.**((30. - 22.5) / 2.5)
         return img
+
+    def data_for_radec(self, ra, dec):
+        bricks = self.bricks_touching_radec_box(ra, ra, dec, dec, scale=0)
+        print('Bricks:', bricks)
+        html = ['<html>',
+                '<head><title>Data for DES-DR1 (%.4f, %.4f)</title>' % (ra, dec),
+                ccds_table_css, '</head><body>']
+
+        html.append('<h1>Data for DES-DR1 RA,Dec (%.4f, %.4f)</h1>' % (ra, dec))
+        html.append('<p>Note, we only have the coadded images, not the individual exposures.</p>')
+
+        html.append('<table class="ccds"><tr><th>Tile</th>')
+        bands = 'grizY'
+        for band in bands:
+            html.append('<th>FITS: %s</th>' % band)
+        html.append('<th>TIFF</th>')
+        for brick in bricks:
+            html.append('<tr><td>%s</td>' % brick.brickname)
+            for band in bands:
+                url = brick.get('fits_image_%s' % band.lower())
+                urlfile = url.strip().split('/')[-1]
+                html.append('<td><a href="%s">%s</a></td>' % (url, urlfile))
+            url = brick.tiff_color_image
+            urlfile = url.strip().split('/')[-1]
+            html.append('<td><a href="%s">%s</a></td></tr>' % (url, urlfile))
+        html.append('</table>')
+        
+        html.extend(['</body>', '</html>'])
+        return HttpResponse('\n'.join(html))
 
     
 class PS1Layer(MapLayer):
@@ -4221,6 +4260,15 @@ def cutouts_common(req, tgz, copsf):
     import numpy as np
     from legacypipe.survey import wcs_for_brick
 
+    layername = request_layer_name(req)
+    layername = layer_to_survey_name(layername)
+    survey = get_survey(layername)
+
+    layer = get_layer(layername)
+
+    if not layer.has_cutouts():
+        return HttpResponse('No cutouts for layer ' + layername)
+
     ra = float(req.GET['ra'])
     dec = float(req.GET['dec'])
 
@@ -4245,9 +4293,6 @@ def cutouts_common(req, tgz, copsf):
     west,nil  = wcs.pixelxy2radec(1, size+0.5)
     east,nil  = wcs.pixelxy2radec(W, size+0.5)
     
-    layer = request_layer_name(req)
-    layer = layer_to_survey_name(layer)
-    survey = get_survey(layer)
     CCDs = survey.ccds_touching_wcs(wcs)
     debug(len(CCDs), 'CCDs')
     CCDs = touchup_ccds(CCDs, survey)
@@ -4437,7 +4482,7 @@ def cutouts_common(req, tgz, copsf):
     ccdsx = []
     for i,(ccd,x,y) in enumerate(ccds):
         fn = ccd.image_filename.replace(settings.DATA_DIR + '/', '')
-        ccdlayer = getattr(ccd, 'layer', layer)
+        ccdlayer = getattr(ccd, 'layer', layername)
         theurl = url % (domains[i%len(domains)], ccdlayer, int(ccd.expnum), ccd.ccdname.strip()) + '?ra=%.4f&dec=%.4f&size=%i' % (ra, dec, size*2)
         print('CCD columns:', ccd.columns())
         ccdsx.append(('<br/>'.join(['CCD %s %i %s, %.1f sec (x,y ~ %i,%i)' % (ccd.filter, ccd.expnum, ccd.ccdname, ccd.exptime, x, y),
@@ -4446,8 +4491,8 @@ def cutouts_common(req, tgz, copsf):
                                     '<small><a href="%s">Look up in JPL Small Bodies database</a></small>' % format_jpl_url(ra, dec, ccd),]),
                       theurl))
     return render(req, 'cutouts.html',
-                  dict(ra=ra, dec=dec, ccds=ccdsx, name=layer, layer=layer,
-                       drname=getattr(survey, 'drname', layer),
+                  dict(ra=ra, dec=dec, ccds=ccdsx, name=layername, layer=layername,
+                       drname=getattr(survey, 'drname', layername),
                        brick=brick, brickx=brickx, bricky=bricky, size=W))
 
 
@@ -5286,13 +5331,13 @@ if __name__ == '__main__':
     #r = c.get('/data-for-radec/?ra=127.1321&dec=30.4327&layer=dr8')
     #r = c.get('/cutout.jpg?ra=159.8827&dec=-0.6241&zoom=13&layer=dr8')
     #r = c.get('/dr8-south/1/12/2277/2055.jpg')
-    r = c.get('/cutouts/?ra=194.5524&dec=26.3962&layer=dr8')
+    #r = c.get('/cutouts/?ra=194.5524&dec=26.3962&layer=dr8')
     #r = c.get('/cutout_panels/dr8/721218/N10/?x=21&y=328&size=100')
     #r = c.get('/cutout_panels/decals-dr5/634863/N10/?x=1077&y=3758&size=100')
     #r = c.get('/cutouts/?ra=194.5517&dec=26.3977&layer=decals-dr5')
     #s = get_survey('decals-dr5')
     #s.get_ccds()
-    
+    r = c.get('/data-for-radec/?ra=54.8733&dec=-13.1156&layer=des-dr1')
     print('r:', type(r))
 
     f = open('out.jpg', 'wb')
