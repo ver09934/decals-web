@@ -1346,30 +1346,27 @@ class MapLayer(object):
                 rotated = overlay.rotate(PA, expand=True)
                 rotated_width, rotated_height = rotated.size
 
-                pix_from_left = (rahi - RA) * 3600 / pixscale
-                pix_from_top = (dechi - DEC) * 3600 / pixscale
+                # --- TODO ---
 
-                paste_shift_x = int(pix_from_left - rotated_width / 2)
-                paste_shift_y = int(pix_from_top - rotated_height / 2)
-
-                img.paste(rotated, (paste_shift_x, paste_shift_y), rotated)
-
-                # --- Testing ---
-
-                drawt = ImageDraw.Draw(img)
-
-                elcra, elcdec = r.ra, r.dec
-                imcra, imcdec = wcs.crval
-                imcx, imcy = wcs.crpix
+                image_center_ra, image_center_dec = wcs.crval
+                image_center_x, image_center_y = wcs.crpix
                 pixscale = wcs.pixel_scale()
 
-                elcx = imcx - ((elcra - imcra) * 3600 / pixscale * np.cos(np.deg2rad(dec)))
-                elcy = imcy - ((elcdec - imcdec) * 3600 / pixscale)
+                ellipse_center_x = image_center_x - ((RA - image_center_ra) * 3600 / pixscale * np.cos(np.deg2rad(dec)))
+                ellipse_center_y = image_center_y - ((DEC - image_center_dec) * 3600 / pixscale)
 
+                # TMP - draw center of ellipse
                 elrad = 2
-                elc = (elcx - elrad, elcy - elrad, elcx + elrad, elcy + elrad)
+                elc = (ellipse_center_x - elrad, ellipse_center_y - elrad, ellipse_center_x + elrad, ellipse_center_y + elrad)
+                draw_tmp = ImageDraw.Draw(img)
+                draw_tmp.ellipse(elc, fill = '#ff0000', outline ='#ff0000')
 
-                drawt.ellipse(elc, fill = '#ff0000', outline ='#ff0000')
+                # ------------------------
+
+                paste_shift_x = int(ellipse_center_x - rotated_width / 2)
+                paste_shift_y = int(ellipse_center_y - rotated_height / 2)
+
+                img.paste(rotated, (paste_shift_x, paste_shift_y), rotated)
 
             img.save(tilefn)
     
