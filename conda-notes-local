@@ -157,3 +157,49 @@ More investigating:
 NOTE: The get_cutout method at ~line 1330 looks useful...
 
 conda install requests
+
+08/05/19
+--------
+- The only layer that seems to be working as of now is decals-dr7
+- Downloading files for a sky section
+    - First use viewer to make sure imagery exists for decals-dr7
+    - Use viewer to find galaxy with bad ellipse
+    - Get link, use to test jpeg cutout on viewer-dev
+    - Example:
+    mkdir -p data/decals-dr7/coadd/252/2520p355 && cd data/decals-dr7/coadd/252/2520p355
+    for i in image model; do
+        for j in g r z; do
+            wget https://portal.nersc.gov/project/cosmo/data/legacysurvey/dr7/coadd/252/2520p355/legacysurvey-2520p355-"$i"-"$j".fits.fz
+        done
+    done 
+
+Data dir tree
+-------------
+(decals-web) ian@debian:~/decals-web/data$ tree
+.
+├── decals-dr7
+│   ├── coadd
+│   │   ├── 228
+│   │   │   └── 2283p055
+│   │   │       ├── legacysurvey-2283p055-image-g.fits.fz
+│   │   │       ├── legacysurvey-2283p055-image-r.fits.fz
+│   │   │       ├── legacysurvey-2283p055-image-z.fits.fz
+│   │   │       ├── legacysurvey-2283p055-model-g.fits.fz
+│   │   │       ├── legacysurvey-2283p055-model-r.fits.fz
+│   │   │       └── legacysurvey-2283p055-model-z.fits.fz
+│   │   └── 252
+│   │       └── 2520p355
+│   │           ├── legacysurvey-2520p355-image-g.fits.fz
+│   │           ├── legacysurvey-2520p355-image-r.fits.fz
+│   │           ├── legacysurvey-2520p355-image-z.fits.fz
+│   │           ├── legacysurvey-2520p355-model-g.fits.fz
+│   │           ├── legacysurvey-2520p355-model-r.fits.fz
+│   │           └── legacysurvey-2520p355-model-z.fits.fz
+│   └── survey-bricks.fits.gz
+├── galaxies-in-dr8.fits
+└── lslga
+    ├── LSLGA-v2.0.fits
+    └── LSLGA-v2.0.kd.fits
+
+7 directories, 16 files
+(decals-web) ian@debian:~/decals-web/data$ 
