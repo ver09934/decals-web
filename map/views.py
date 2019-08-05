@@ -1298,15 +1298,6 @@ class MapLayer(object):
             from PIL import Image, ImageDraw
             img = Image.open(tilefn)
 
-            # TODO: Remove
-            print('\n'*2 + '-'*120)
-            print(wcs)
-            print('-'*120)
-            print(type(wcs))
-            print('-'*120)
-            print(dir(wcs))
-            print('-'*120 + '\n'*2)
-
             ra, dec = wcs.crval
             img_cx, img_cy = wcs.crpix
             pixscale = wcs.pixel_scale()
@@ -1314,11 +1305,8 @@ class MapLayer(object):
             # TODO: Needed? Use img_cx, img_cy instead
             width, height = img.size
 
-            # TODO: Check if should be / np.cos or * np.cos, remove unneeded
             ralo = ra - ((width / 2) * pixscale / 3600 / np.cos(np.deg2rad(dec)))
             rahi = ra + ((width / 2) * pixscale / 3600 / np.cos(np.deg2rad(dec)))
-            # ralo = ra - ((width / 2) * pixscale / 3600)
-            # rahi = ra + ((width / 2) * pixscale / 3600)
             declo = dec - ((height / 2) * pixscale / 3600)
             dechi = dec + ((height / 2) * pixscale / 3600)
 
