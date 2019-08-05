@@ -1298,6 +1298,14 @@ class MapLayer(object):
             from PIL import Image, ImageDraw
             img = Image.open(tilefn)
 
+            print('\n'*2 + '-'*120)
+            print(wcs)
+            print('-'*120)
+            print(type(wcs))
+            print('-'*120)
+            print(dir(wcs))
+            print('-'*120 + '\n'*2)
+
             ra, dec = wcs.crval
             pixscale = wcs.pixel_scale()
 
@@ -1305,6 +1313,8 @@ class MapLayer(object):
 
             ralo = ra - ((width / 2) * pixscale / 3600 / np.cos(np.deg2rad(dec)))
             rahi = ra + ((width / 2) * pixscale / 3600 / np.cos(np.deg2rad(dec)))
+            # ralo = ra - ((width / 2) * pixscale / 3600)
+            # rahi = ra + ((width / 2) * pixscale / 3600)
             declo = dec - ((height / 2) * pixscale / 3600)
             dechi = dec + ((height / 2) * pixscale / 3600)
 
@@ -1340,6 +1350,23 @@ class MapLayer(object):
                 paste_shift_y = int(pix_from_top - rotated_height / 2)
 
                 img.paste(rotated, (paste_shift_x, paste_shift_y), rotated)
+
+                # --- Testing ---
+
+                drawt = ImageDraw.Draw(img)
+
+                elcra, elcdec = r.ra, r.dec
+                imcra, imcdec = wcs.crval
+                imcx, imcy = wcs.crpix
+                pixscale = wcs.pixel_scale()
+
+                elcx = imcx - ((elcra - imcra) * 3600 / pixscale * np.cos(np.deg2rad(dec)))
+                elcy = imcy - ((elcdec - imcdec) * 3600 / pixscale)
+
+                elrad = 2
+                elc = (elcx - elrad, elcy - elrad, elcx + elrad, elcy + elrad)
+
+                drawt.ellipse(elc, fill = '#ff0000', outline ='#ff0000')
 
             img.save(tilefn)
     
