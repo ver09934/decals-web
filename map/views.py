@@ -1341,11 +1341,6 @@ class MapLayer(object):
 
                 img.paste(rotated, (paste_shift_x, paste_shift_y), rotated)
 
-                # TODO: Remove this test
-                elc = (ellipse_x - 2, ellipse_y - 2, ellipse_x + 2, ellipse_y + 2)
-                draw_tmp = ImageDraw.Draw(img)
-                draw_tmp.ellipse(elc, fill = '#ff0000', outline ='#ff0000')
-
             img.save(tilefn)
     
         return send_file(tilefn, 'image/jpeg', unlink=(not savecache),
