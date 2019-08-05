@@ -1302,13 +1302,10 @@ class MapLayer(object):
             img_cx, img_cy = wcs.crpix
             pixscale = wcs.pixel_scale()
 
-            # TODO: Needed? Use img_cx, img_cy instead
-            width, height = img.size
-
-            ralo = ra - ((width / 2) * pixscale / 3600 / np.cos(np.deg2rad(dec)))
-            rahi = ra + ((width / 2) * pixscale / 3600 / np.cos(np.deg2rad(dec)))
-            declo = dec - ((height / 2) * pixscale / 3600)
-            dechi = dec + ((height / 2) * pixscale / 3600)
+            ralo = ra - (img_cx * pixscale / 3600 / np.cos(np.deg2rad(dec)))
+            rahi = ra + (img_cx * pixscale / 3600 / np.cos(np.deg2rad(dec)))
+            declo = dec - (img_cy * pixscale / 3600)
+            dechi = dec + (img_cy * pixscale / 3600)
 
             from map.cats import query_lslga_radecbox
             galaxies = query_lslga_radecbox(ralo, rahi, declo, dechi)
