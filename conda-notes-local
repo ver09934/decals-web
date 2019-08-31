@@ -203,3 +203,23 @@ Data dir tree
 
 7 directories, 16 files
 (decals-web) ian@debian:~/decals-web/data$ 
+
+Problem notes:
+--------------
+
+TODO:
+- Fix viewer-dev:
+Only DR8...
+Compare these two, and see if you can see the issue...
+- http://legacysurvey.org/viewer-dev/jpeg-cutout?ra=210.5482&dec=55.8154&zoom=12&layer=dr8&lslga
+- http://legacysurvey.org/viewer-dev?ra=210.5482&dec=55.8154&zoom=12&layer=dr8&lslga
+Some more:
+- http://legacysurvey.org/viewer-dev/jpeg-cutout?ra=213.0934&dec=50.3485&zoom=13&layer=dr8&lslga
+- http://legacysurvey.org/viewer-dev?ra=210.5482&dec=55.8154&zoom=12&layer=dr8&lslga#NGC%205520
+DR7...
+- http://legacysurvey.org/viewer-dev/jpeg-cutout?ra=252.16&dec=35.55&zoom=13&layer=decals-dr7&lslga&width=500&height=500
+- http://legacysurvey.org/viewer-dev/jpeg-cutout?ra=252.16&dec=35.50&zoom=13&layer=decals-dr7&lslga&width=500&height=500
+        - Alt 1: http://legacysurvey.org/viewer-dev/jpeg-cutout?ra=252.12&dec=35.50&zoom=13&layer=decals-dr7&lslga&width=500&height=500
+        - Alt 2: http://legacysurvey.org/viewer-dev/jpeg-cutout?ra=252.135&dec=35.525&zoom=13&layer=decals-dr7&lslga&width=500&height=500
+        - Zoomed: http://legacysurvey.org/viewer-dev/jpeg-cutout?ra=252.142&dec=35.528&zoom=14&layer=decals-dr7&lslga&width=500&height=500
+- http://legacysurvey.org/viewer-dev/jpeg-cutout?ra=217.5348&dec=35.2477&zoom=13&layer=decals-dr7&lslga
