@@ -1309,11 +1309,10 @@ class MapLayer(object):
             dechi = dec + (img_cy * pixscale / 3600)
 
             from map.cats import query_lslga_radecbox, query_lslga_model_radecbox
-            galaxies = None
-            if req.GET.get('lslga', None) == '':
+            if 'lslga' in req.GET:
                 lslgacolor_default = '#3388ff'
                 galaxies = query_lslga_radecbox(ralo, rahi, declo, dechi)
-            elif req.GET.get('lslga-model', None) == '':
+            elif 'lslga-model' in req.GET:
                 lslgacolor_default = '#ffaa33'
                 galaxies = query_lslga_model_radecbox(ralo, rahi, declo, dechi)
             else:
@@ -1322,11 +1321,11 @@ class MapLayer(object):
             for r in galaxies if galaxies is not None else []:
 
                 RA, DEC = r.ra, r.dec
-                if req.GET == 'lslga':
+                if 'lslga' in req.GET:
                     RAD = r.radius_arcsec
                     AB = r.ba
                     PA = r.pa
-                elif req.GET == 'lslga-model':
+                elif 'lslga-model' in req.GET:
                     RAD = r.radius_model_arcsec
                     AB = r.ba_model
                     PA = r.pa_model
