@@ -63,6 +63,41 @@ except:
     pass
 
 
+def gaia_stars_for_wcs(req):
+    import json
+    from legacypipe.gaiacat import GaiaCatalog
+    from astrometry.util.util import Tan
+    import os
+    import numpy as np
+    
+    os.environ['GAIA_CAT_DIR'] = '/global/project/projectdirs/cosmo/work/gaia/chunks-gaia-dr2-astrom-2/'
+
+    J = json.loads(req.POST['wcs'])
+    print('Got WCS values:', J)
+    reply = []
+    gaia = GaiaCatalog()
+    for jwcs in J:
+        wcs = Tan(*[float(jwcs[k]) for k in
+                    ['crval1', 'crval2', 'crpix1', 'crpix2', 'cd11', 'cd12', 'cd21', 'cd22',
+                     'width', 'height']])
+        stars = gaia.get_catalog_in_wcs(wcs)
+        I = np.argsort(stars.phot_g_mean_mag)
+        stars.cut(I[:10])
+        ok,xx,yy = wcs.radec2pixelxy(stars.ra, stars.dec)
+
+        def clean(x):
+            if np.isfinite(x):
+                return float(x)
+            return 0.
+
+        reply.append([
+            dict(ra=clean(g.ra), dec=clean(g.dec),
+                 g=clean(g.phot_g_mean_mag), bp=clean(g.phot_bp_mean_mag),
+                 rp=clean(g.phot_rp_mean_mag), x=clean(x), y=clean(y))
+            for g,x,y in zip(stars, xx, yy)])
+    return HttpResponse(json.dumps(reply),
+                        content_type='application/json')
+    
 def cat_phat_clusters(req, ver):
     import json
     from astrometry.util.fits import fits_table, merge_tables
@@ -289,8 +324,8 @@ def upload_cat(req):
     except:
         pass
 
-    
-    return HttpResponseRedirect(settings.ROOT_URL + reverse(index) +
+    from map.views import my_reverse
+    return HttpResponseRedirect(my_reverse(req, index) +
                                 '?ra=%.4f&dec=%.4f&catalog=%s' % (ra, dec, catname))
 
 galaxycats = {}
@@ -335,8 +370,14 @@ def get_random_galaxy(layer=None):
 
     if not layer in galaxycats:
         from astrometry.util.fits import fits_table
+
         galaxycats[layer] = fits_table(galfn)
 
+        ### HACK
+        #cat = fits_table(galfn)
+        #cat.cut(cat.dec < 30.)
+        #galaxycats[layer] = cat
+        
     galaxycat = galaxycats[layer]
     i = np.random.randint(len(galaxycat))
     ra = float(galaxycat.ra[i])
@@ -730,6 +771,12 @@ def cat_targets_drAB(req, ver, cats=None, tag='', bgs=False, sky=False, bright=F
     return HttpResponse(json.dumps(rtn), content_type='application/json')
 
 def cat_lslga(req, ver):
+    return _cat_lslga(req, ver)
+
+def cat_lslga_model(req, ver):
+    return _cat_lslga(req, ver, model=True)
+
+def _cat_lslga(req, ver, model=False):
     import json
     import numpy as np
     tag = 'lslga'
@@ -745,28 +792,37 @@ def cat_lslga(req, ver):
     if not ver in catversions[tag]:
         raise RuntimeError('Invalid version %i for tag %s' % (ver, tag))
 
-    T = query_lslga_radecbox(ralo, rahi, declo, dechi)
+    if model:
+        T = query_lslga_model_radecbox(ralo, rahi, declo, dechi)
+    else:
+        T = query_lslga_radecbox(ralo, rahi, declo, dechi)
+
     if T is None:
         return HttpResponse(json.dumps(dict(rd=[], name=[], radiusArcsec=[], abRatio=[], posAngle=[], pgc=[], type=[], redshift=[])),
                             content_type='application/json')
 
     rd = list((float(r),float(d)) for r,d in zip(T.ra, T.dec))
     names = [t.strip() for t in T.galaxy]
-    radius = [float(r) for r in T.radius_arcsec.astype(np.float32)]
-
-    ab = [float(f) for f in T.ba.astype(np.float32)]
-    pa = [float(90.-f) if np.isfinite(f) else 0. for f in T.pa.astype(np.float32)]
+    if model:
+        radius = [float(r) for r in T.radius_model_arcsec.astype(np.float32)]
+        ab = [float(f) for f in T.ba_model.astype(np.float32)]
+        pa = [float(90.-f) if np.isfinite(f) else 0. for f in T.pa_model.astype(np.float32)]
+        color = ['#ffaa33']*len(T)
+    else:
+        radius = [float(r) for r in T.radius_arcsec.astype(np.float32)]
+        ab = [float(f) for f in T.ba.astype(np.float32)]
+        pa = [float(90.-f) if np.isfinite(f) else 0. for f in T.pa.astype(np.float32)]
+        color = ['#3388ff']*len(T)
     pgc = [int(p) for p in T.pgc]
     z = [float(z) if np.isfinite(z) else -1. for z in T.z.astype(np.float32)]
     typ = [t.strip() if t != 'nan' else '' for t in T.get('type')]
 
     return HttpResponse(json.dumps(dict(rd=rd, name=names, radiusArcsec=radius,
                                         abRatio=ab, posAngle=pa, pgc=pgc, type=typ,
-                                        redshift=z)),
-                        content_type='application/json')
+                                        redshift=z, color=color)),
+                                        content_type='application/json')
 
-def query_lslga_radecbox(ralo, rahi, declo, dechi):
-    fn = os.path.join(settings.DATA_DIR, 'lslga', 'LSLGA-v2.0.kd.fits')
+def query_lslga_radecbox_any(fn, ralo, rahi, declo, dechi):
     ra,dec,radius = radecbox_to_circle(ralo, rahi, declo, dechi)
     # max radius for LSLGA entries?!
     lslga_radius = 1.0
@@ -786,6 +842,46 @@ def query_lslga_radecbox(ralo, rahi, declo, dechi):
     #print('Cut to', len(T), 'LSLGA possibly touching WCS:', T.galaxy)
     if len(T) == 0:
         return None
+    return T
+
+def query_lslga_radecbox(ralo, rahi, declo, dechi):
+    fn = os.path.join(settings.DATA_DIR, 'lslga', 'LSLGA-v2.0.kd.fits')
+    T = query_lslga_radecbox_any(fn, ralo, rahi, declo, dechi)
+    if len(T) == 0:
+        return None
+    return T
+
+def query_lslga_model_radecbox(ralo, rahi, declo, dechi):
+    import numpy as np
+    fn = os.path.join(settings.DATA_DIR, 'lslga', 'dr8-lslga-northsouth.kd.fits')
+    T = query_lslga_radecbox_any(fn, ralo, rahi, declo, dechi)
+    if len(T) == 0:
+        return None
+    else:
+        # convert Tractor model parameters to ellipse geometry
+        def get_ba_pa(e1, e2):
+            ee = np.hypot(e1, e2)
+            ba = (1 - ee) / (1 + ee)
+            pa = 180 - (-np.rad2deg(np.arctan2(e2, e1) / 2))
+            return ba, pa
+            
+        ba, pa = [], []
+        for Tone in T:
+            ttype = Tone.type.strip()
+            if ttype == 'DEV' or ttype == 'COMP':
+                e1, e2 = Tone.shapedev_e1, Tone.shapedev_e2
+                bai, pai = get_ba_pa(e1, e2)
+            elif ttype == 'EXP' or ttype == 'REX':
+                e1, e2 = Tone.shapeexp_e1, Tone.shapeexp_e2
+                bai, pai = get_ba_pa(e1, e2)
+            else: # PSF
+                bai, pai = np.nan, np.nan
+            ba.append(bai)
+            pa.append(pai)
+        
+        T.pa_model = np.hstack(pa)
+        T.ba_model = np.hstack(ba)
+        T.radius_model_arcsec = T.fracdev * T.shapedev_r + (1 - T.fracdev) * T.shapeexp_r
     return T
 
 def cat_spec(req, ver):
@@ -822,6 +918,9 @@ def cat_kd(req, ver, tag, fn):
 
     ra,dec,radius = radecbox_to_circle(ralo, rahi, declo, dechi)
     T = cat_query_radec(fn, ra, dec, radius)
+    if T is None:
+        debug('No objects in query')
+        return None
     debug(len(T), 'spectra')
     if ralo > rahi:
         # RA wrap
@@ -1073,27 +1172,6 @@ def cat(req, ver, tag, fn):
         
     return HttpResponse(json.dumps(rtn), content_type='application/json')
 
-def cat_mobo_dr4(req, ver, zoom, x, y, tag='mzls+bass-dr4'):
-    return cat_decals(req, ver, zoom, x, y, tag=tag, docache=False)
-
-def cat_decals_dr5(req, ver, zoom, x, y, tag='decals-dr5'):
-    return cat_decals(req, ver, zoom, x, y, tag=tag, docache=False)
-
-def cat_mobo_dr6(req, ver, zoom, x, y, tag='mzls+bass-dr6'):
-    return cat_decals(req, ver, zoom, x, y, tag=tag, docache=False)
-
-def cat_decals_dr7(req, ver, zoom, x, y, tag='decals-dr7'):
-    return cat_decals(req, ver, zoom, x, y, tag=tag, docache=False)
-
-def cat_dr8(req, ver, zoom, x, y, tag='dr8'):
-    return cat_decals(req, ver, zoom, x, y, tag=tag, docache=False)
-
-def cat_dr8_north(req, ver, zoom, x, y, tag='dr8-north'):
-    return cat_decals(req, ver, zoom, x, y, tag=tag, docache=False)
-
-def cat_dr8_south(req, ver, zoom, x, y, tag='dr8-south'):
-    return cat_decals(req, ver, zoom, x, y, tag=tag, docache=False)
-
 def any_cat(req, name, ver, zoom, x, y, **kwargs):
     from map.views import layer_name_map, get_layer
     print('any_cat(', name, ver, zoom, x, y, ')')
@@ -1102,7 +1180,6 @@ def any_cat(req, name, ver, zoom, x, y, **kwargs):
     if layer is None:
         return HttpResponse('no such layer: ' + name)
     return cat_decals(req, ver, zoom, x, y, tag=name, docache=False)
-
 
 def cat_decals(req, ver, zoom, x, y, tag='decals', docache=True):
     import json
@@ -1215,9 +1292,15 @@ if __name__ == '__main__':
     c = Client()
     #r = c.get('/lslga/1/cat.json?ralo=259.2787&rahi=259.7738&declo=35.9422&dechi=36.1656')
     #r = c.get('/lslga/1/cat.json?ralo=259.5726&rahi=260.0677&declo=35.9146&dechi=36.1382')
-    r = c.get('/usercatalog/1/cat.json?ralo=350.0142&rahi=350.0761&declo=-9.6430&dechi=-9.6090&cat=tmppboi50xv')
+    #r = c.get('/usercatalog/1/cat.json?ralo=350.0142&rahi=350.0761&declo=-9.6430&dechi=-9.6090&cat=tmppboi50xv')
     ## should contain NGC 6349
 
+    #r = c.get('/dr8-south/1/12/3572/2187.cat.json')
+    #r = c.get('/dr8-north/1/14/8194/5895.cat.json')
+    #r = c.get('/dr8/1/14/8194/5895.cat.json')
+    #r = c.get('/decals-dr7/1/14/8639/7624.cat.json')
+    r = c.get('/mzls+bass-dr6/1/14/7517/6364.cat.json')
+    
     f = open('out', 'wb')
     for x in r:
         f.write(x)

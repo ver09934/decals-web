@@ -3,7 +3,8 @@ if __name__ == '__main__':
     ## NOTE, if you want to run this from the command-line, probably have to do so
     # from sgn04 node within the virtualenv.
     import sys
-    sys.path.insert(0, 'django-1.9')
+    #sys.path.insert(0, 'django-1.9')
+    sys.path.insert(0, 'django-2.2.4')
     import os
     os.environ['DJANGO_SETTINGS_MODULE'] = 'viewer.settings'
     import django
@@ -14,10 +15,10 @@ import sys
 import re
 from django.http import HttpResponse, StreamingHttpResponse
 try:
-    from django.core.urlresolvers import reverse
+    from django.core.urlresolvers import reverse, get_script_prefix
 except:
     # django 2.0
-    from django.urls import reverse
+    from django.urls import reverse, get_script_prefix
 
 from django import forms
 from viewer import settings
@@ -122,25 +123,19 @@ try:
 except:
     pass
 
-
-def my_url(req, url):
-
-    # Can't do this simple thing because CORS prevents
-    #decaps.legacysurvey.org from reading from legacysurvey.org.
-    #baseurl = 'http://%s%s' % (settings.HOSTNAME, settings.ROOT_URL)
-    path = settings.ROOT_URL
-    if is_decaps(req):
-        path = '/'
-    baseurl = req.build_absolute_uri(path)
-    if baseurl.endswith('/'):
-        baseurl = baseurl[:-1]
-    #print('Base URL:', baseurl)
-
-    return baseurl + url
+def my_reverse(req, *args, **kwargs):
+    ### FIXME -- does this work for decaps.legacysurvey.org ??
+    # Or need something like:
+    # path = settings.ROOT_URL
+    # if is_decaps(req):
+    #     path = '/'
+    return reverse(*args, **kwargs)
 
 def urls(req):
     from django.shortcuts import render
-    return render(req, 'urls.html')
+    script_prefix = get_script_prefix()
+    this_url = reverse('urls')
+    return render(req, 'urls.html', dict(script_prefix=script_prefix, this_url=this_url))
 
 def gfas(req):
     from django.shortcuts import render
@@ -300,10 +295,12 @@ def _index(req,
     if ra is None or dec is None:
         ra,dec,galname = get_random_galaxy(layer=layer)
 
-    caturl = my_url(req, '/{id}/{ver}/{z}/{x}/{y}.cat.json')
+    from urllib.parse import unquote
+    caturl = unquote(my_reverse(req, 'cat-json-tiled-pattern'))
+    smallcaturl = unquote(my_reverse(req, 'cat-json-pattern'))
 
-    smallcaturl = my_url(req, '/{id}/{ver}/cat.json?ralo={ralo}&rahi={rahi}&declo={declo}&dechi={dechi}')
-
+    print('Small catalog URL:', smallcaturl)
+    
     tileurl = settings.TILE_URL
 
     subdomains = settings.SUBDOMAINS
@@ -316,15 +313,14 @@ def _index(req,
     subdomains_B = settings.SUBDOMAINS_B
     subdomains_B = '[' + ','.join(["'%s'" % s for s in subdomains_B]) + '];'
 
-    ccdsurl = my_url(req, reverse('ccd-list')) + '?ralo={ralo}&rahi={rahi}&declo={declo}&dechi={dechi}&id={id}'
-    bricksurl = my_url(req, reverse('brick-list')) + '?ralo={ralo}&rahi={rahi}&declo={declo}&dechi={dechi}&layer={layer}'
-    expsurl = my_url(req, reverse('exposure-list')) + '?ralo={ralo}&rahi={rahi}&declo={declo}&dechi={dechi}&id={id}'
-    platesurl = my_url(req, reverse('sdss-plate-list')) + '?ralo={ralo}&rahi={rahi}&declo={declo}&dechi={dechi}'
-    #sqlurl = baseurl + '/sql-box/?north={north}&east={east}&south={south}&west={west}&q={q}'
-    namequeryurl = my_url(req, reverse('object-query')) + '?obj={obj}'
-    uploadurl = my_url(req, reverse('upload-cat'))
-    usercatalogurl = my_url(req, reverse(cat_user, args=(1,))) + '?ralo={ralo}&rahi={rahi}&declo={declo}&dechi={dechi}&cat={cat}'
-    usercatalogurl2 = my_url(req, reverse(cat_user, args=(1,))) + '?start={start}&N={N}&cat={cat}'
+    ccdsurl = my_reverse(req, 'ccd-list') + '?ralo={ralo}&rahi={rahi}&declo={declo}&dechi={dechi}&id={id}'
+    bricksurl = my_reverse(req, 'brick-list') + '?ralo={ralo}&rahi={rahi}&declo={declo}&dechi={dechi}&layer={layer}'
+    expsurl = my_reverse(req, 'exposure-list') + '?ralo={ralo}&rahi={rahi}&declo={declo}&dechi={dechi}&id={id}'
+    platesurl = my_reverse(req, 'sdss-plate-list') + '?ralo={ralo}&rahi={rahi}&declo={declo}&dechi={dechi}'
+    namequeryurl = my_reverse(req, 'object-query') + '?obj={obj}'
+    uploadurl = my_reverse(req, 'upload-cat')
+    usercatalogurl = my_reverse(req, cat_user, args=(1,)) + '?ralo={ralo}&rahi={rahi}&declo={declo}&dechi={dechi}&cat={cat}'
+    usercatalogurl2 = my_reverse(req, cat_user, args=(1,)) + '?start={start}&N={N}&cat={cat}'
 
     usercatalog = req.GET.get('catalog', None)
     usercats = None
@@ -389,7 +385,6 @@ def _index(req,
                 layer=layer, tileurl=tileurl,
                 absurl=absurl,
                 hostname_url=hostname_url,
-                sqlurl=sqlurl,
                 uploadurl=uploadurl,
                 caturl=caturl, bricksurl=bricksurl,
                 smallcaturl=smallcaturl,
@@ -610,8 +605,8 @@ def data_for_radec(req):
     ra  = float(req.GET['ra'])
     dec = float(req.GET['dec'])
     layername = request_layer_name(req)
-    #layer = layer_to_survey_name(layer)
     layer = get_layer(layername)
+    print('data_for_radec: layer', layer)
     return layer.data_for_radec(req, ra, dec)
 
 class MapLayer(object):
@@ -639,7 +634,10 @@ class MapLayer(object):
 
     def data_for_radec(self, req, ra, dec):
         pass
-        
+
+    def get_catalog(self, req, ralo, rahi, declo, dechi):
+        return HttpResponse('no catalog for layer ' + self.name)
+
     def ccds_touching_box(self, north, south, east, west, Nmax=None):
         return None
 
@@ -1310,15 +1308,25 @@ class MapLayer(object):
             declo = dec - (img_cy * pixscale / 3600)
             dechi = dec + (img_cy * pixscale / 3600)
 
-            from map.cats import query_lslga_radecbox
-            galaxies = query_lslga_radecbox(ralo, rahi, declo, dechi)
+            from map.cats import query_lslga_radecbox, query_lslga_model_radecbox
+            if req.GET == 'lslga':
+                lslgacolor_default = '#3388ff'
+                galaxies = query_lslga_radecbox(ralo, rahi, declo, dechi)
+            elif req.GET == 'lslga-model':
+                lslgacolor_default = '#ffaa33'
+                galaxies = query_lslga_model_radecbox(ralo, rahi, declo, dechi)
 
             for r in galaxies if galaxies is not None else []:
 
                 RA, DEC = r.ra, r.dec
-                RAD = r.radius_arcsec
-                AB = r.ba
-                PA = r.pa
+                if req.GET == 'lslga':
+                    RAD = r.radius_arcsec
+                    AB = r.ba
+                    PA = r.pa
+                elif req.GET == 'lslga-model':
+                    RAD = r.radius_model_arcsec
+                    AB = r.ba_model
+                    PA = r.pa_model
 
                 if np.isnan(AB):
                     AB = 1
@@ -1334,7 +1342,7 @@ class MapLayer(object):
                 overlay = Image.new('RGBA', (overlay_width, overlay_height))
                 draw = ImageDraw.ImageDraw(overlay)
                 box_corners = (0, 0, overlay_width, overlay_height)
-                ellipse_color = '#' + req.GET.get('lslgacolor', '#3388ff').lstrip('#')
+                ellipse_color = '#' + req.GET.get('lslgacolor', lslgacolor_default).lstrip('#')
                 ellipse_width = int(np.round(float(req.GET.get('lslgawidth', 3)), 0))
                 draw.ellipse(box_corners, fill=None, outline=ellipse_color, width=ellipse_width)
 
@@ -1590,6 +1598,17 @@ class DecalsLayer(MapLayer):
                     (self.drname, ra, dec),
             ccds_table_css + '<body>',
         ]
+
+        bb = get_radec_bbox(req)
+        print('DecalsLayer.data_for_radec: bb', bb)
+        if bb is not None:
+            ralo,rahi,declo,dechi = bb
+            print('RA,Dec bb:', bb)
+            caturl = (my_reverse(req, 'cat-fits', args=(self.name,)) +
+                      '?ralo=%f&rahi=%f&declo=%f&dechi=%f' % (ralo, rahi, declo, dechi))
+            html.extend(['<h1>%s Data for RA,Dec box:</h1>' % self.drname,
+                         '<p><a href="%s">Catalog</a></p>' % caturl])
+
         brick_html = self.brick_details_body(brick)
         html.extend(brick_html)
 
@@ -1696,6 +1715,18 @@ class DecalsLayer(MapLayer):
         else:
             cat = merge_tables(cat, columns='fillzero')
         return cat,hdr
+
+    def get_catalog(self, req, ralo, rahi, declo, dechi):
+        from map.cats import radecbox_to_wcs
+        wcs = radecbox_to_wcs(ralo, rahi, declo, dechi)
+        cat,hdr = self.get_catalog_in_wcs(wcs)
+        fn = 'cat-%s.fits' % (self.name)
+        import tempfile
+        f,outfn = tempfile.mkstemp(suffix='.fits')
+        os.close(f)
+        os.unlink(outfn)
+        cat.writeto(outfn, header=hdr)
+        return send_file(outfn, 'image/fits', unlink=True, filename=fn)
 
     def get_bricks(self):
         B = self.survey.get_bricks_readonly()
@@ -2105,6 +2136,7 @@ class SdssLayer(MapLayer):
         self.bricks = None
 
     def data_for_radec(self, req, ra, dec):
+        import numpy as np
         # from ccd_list...
         # 0.15: SDSS field radius is ~ 0.13
         radius = 0.15
@@ -2326,6 +2358,15 @@ class LegacySurveySplitLayer(MapLayer):
             ccds_table_css + '<body>',
         ]
 
+        bb = get_radec_bbox(req)
+        if bb is not None:
+            ralo,rahi,declo,dechi = bb
+            print('RA,Dec bb:', bb)
+            caturl = (my_reverse(req, 'cat-fits', args=(self.name,)) +
+                      '?ralo=%f&rahi=%f&declo=%f&dechi=%f' % (ralo, rahi, declo, dechi))
+            html.extend(['<h1>%s Data for RA,Dec box:</h1>' % self.drname,
+                         '<p><a href="%s">Catalog</a></p>' % caturl])
+
         for layer in [self.top, self.bottom]:
             survey = layer.survey
             bricks = survey.get_bricks()
@@ -2361,7 +2402,6 @@ class LegacySurveySplitLayer(MapLayer):
         html.extend(['</body></html>',])
         return HttpResponse('\n'.join(html))
 
-
     def ccds_touching_box(self, north, south, east, west, Nmax=None):
         from astrometry.util.fits import merge_tables
         ccds_n = self.top.ccds_touching_box(north, south, east, west, Nmax=Nmax)
@@ -2375,6 +2415,19 @@ class LegacySurveySplitLayer(MapLayer):
             return None
         return merge_tables(ccds, columns='fillzero')
 
+    # copied from DecalsLayer
+    def get_catalog(self, req, ralo, rahi, declo, dechi):
+        from map.cats import radecbox_to_wcs
+        wcs = radecbox_to_wcs(ralo, rahi, declo, dechi)
+        cat,hdr = self.get_catalog_in_wcs(wcs)
+        fn = 'cat-%s.fits' % (self.name)
+        import tempfile
+        f,outfn = tempfile.mkstemp(suffix='.fits')
+        os.close(f)
+        os.unlink(outfn)
+        cat.writeto(outfn, header=hdr)
+        return send_file(outfn, 'image/fits', unlink=True, filename=fn)
+
     def get_catalog_in_wcs(self, wcs):
         from astrometry.util.fits import merge_tables
         allcats = []
@@ -2385,7 +2438,11 @@ class LegacySurveySplitLayer(MapLayer):
                 if above:
                     cat.cut(cat.dec >= self.decsplit)
                 else:
-                    cat.cut(cat.dec < self.decsplit)
+                    from astrometry.util.starutil_numpy import radectolb
+                    import numpy as np
+                    l,b = radectolb(cat.ra, cat.dec)
+                    sgc = (b < 0.)
+                    cat.cut(np.logical_or(cat.dec < self.decsplit, sgc))
                 allcats.append(cat)
             if h is not None:
                 hdr = h
@@ -2417,6 +2474,8 @@ class LegacySurveySplitLayer(MapLayer):
         print('render_into_wcs zoom,x,y', zoom,x,y, 'wcs', wcs)
 
         if y != -1:
+            ## FIXME -- this is not the correct cut -- only listen to split for NGC --
+            ## but this doesn't get called anyway because the JavaScript layer has the smarts.
             split = self.tilesplits[zoom]
             if y < split:
                 return self.top.render_into_wcs(wcs, zoom, x, y,
@@ -2459,6 +2518,7 @@ class LegacySurveySplitLayer(MapLayer):
         '''Pre-rendered JPEG tile filename.'''
         print('SplitLayer.get_tile_filename: zoom', zoom, 'y', y)
         split = self.tilesplits[zoom]
+        ## FIXME -- this is not the correct cut -- ignores NGC/SGC difference
         if y < split:
             fn = self.top.get_tile_filename(ver, zoom, x, y)
             print('Top fn', fn)
@@ -4099,10 +4159,10 @@ def ccd_detail(req, layer, ccd):
                  (ccd, c.cpimage, c.cpimage_hdu, c.exptime, c.fwhm*0.262))
         return HttpResponse(about)
 
-    imgurl   = my_url(req, reverse('image_data', args=[layer, ccd]))
-    dqurl    = my_url(req, reverse('dq_data', args=[layer, ccd]))
-    ivurl    = my_url(req, reverse('iv_data', args=[layer, ccd]))
-    imgstamp = my_url(req, reverse('image_stamp', args=[layer, ccd]))
+    imgurl   = my_reverse(req, 'image_data', args=[layer, ccd])
+    dqurl    = my_reverse(req, 'dq_data', args=[layer, ccd])
+    ivurl    = my_reverse(req, 'iv_data', args=[layer, ccd])
+    imgstamp = my_reverse(req, 'image_stamp', args=[layer, ccd])
     flags = ''
     cols = c.columns()
     if 'photometric' in cols and 'blacklist_ok' in cols:
@@ -4237,7 +4297,7 @@ def touchup_ccds(ccds, survey):
     return ccds
 
 def format_jpl_url(req, ra, dec, ccd):
-    jpl_url = my_url(req, reverse(jpl_lookup))
+    jpl_url = my_reverse(req, jpl_lookup)
     return ('%s?ra=%.4f&dec=%.4f&date=%s&camera=%s' %
             (jpl_url, ra, dec, ccd.date_obs + ' ' + ccd.ut, ccd.camera.strip()))
 
@@ -4251,9 +4311,9 @@ def ccds_overlapping_html(req, ccds, layer, ra=None, dec=None):
         ccdname = '%s %i %s %s' % (ccd.camera.strip(), ccd.expnum,
                                    ccd.ccdname.strip(), ccd.filter.strip())
         ccdtag = ccdname.replace(' ','-')
-        imgurl = my_url(req, reverse('image_data', args=(layer, ccdtag)))
-        dqurl  = my_url(req, reverse('dq_data', args=(layer, ccdtag)))
-        ivurl  = my_url(req, reverse('iv_data', args=(layer, ccdtag)))
+        imgurl = my_reverse(req, 'image_data', args=(layer, ccdtag))
+        dqurl  = my_reverse(req, 'dq_data', args=(layer, ccdtag))
+        ivurl  = my_reverse(req, 'iv_data', args=(layer, ccdtag))
         imgooiurl = imgurl + '?type=ooi'
         ooitext = ''
         if '_oki_' in ccd.image_filename:
@@ -4263,7 +4323,7 @@ def ccds_overlapping_html(req, ccds, layer, ra=None, dec=None):
             jplstr = '<td><a href="%s">JPL</a></td>' % format_jpl_url(req, ra, dec, ccd)
         html.append(('<tr><td><a href="%s">%s</a></td><td>%.1f</td><td>%.2f</td>' +
                      '<td>%s</td><td>%s</td><td><a href="%s">%s</a></td><td>%s</td><td><a href="%s">oow</a></td><td><a href="%s">ood</a></td>%s</tr>') % (
-                         my_url(req, reverse(ccd_detail, args=(layer, ccdtag))), ccdname,
+                         my_reverse(req, ccd_detail, args=(layer, ccdtag)), ccdname,
                          ccd.exptime, ccd.seeing, ccd.propid, ccd.date_obs + ' ' + ccd.ut[:8],
                          imgurl, ccd.image_filename.strip(), ooitext, ivurl, dqurl,
                          jplstr))
@@ -4513,7 +4573,7 @@ def cutouts_common(req, tgz, copsf):
         ccdsx.append(('<br/>'.join(['CCD %s %i %s, %.1f sec (x,y ~ %i,%i)' % (ccd.filter, ccd.expnum, ccd.ccdname, ccd.exptime, x, y),
                                     '<small>(%s [%i])</small>' % (fn, ccd.image_hdu),
                                     '<small>(observed %s @ %s)</small>' % (ccd.date_obs, ccd.ut),
-                                    '<small><a href="%s">Look up in JPL Small Bodies database</a></small>' % format_jpl_url(ra, dec, ccd),]),
+                                    '<small><a href="%s">Look up in JPL Small Bodies database</a></small>' % format_jpl_url(req, ra, dec, ccd),]),
                       theurl))
     return render(req, 'cutouts.html',
                   dict(ra=ra, dec=dec, ccds=ccdsx, name=layername, layer=layername,
@@ -4574,9 +4634,12 @@ def jpl_lookup(req):
     print('JPL lookup: submitting search')
     r10 = s.post('https://ssd.jpl.nasa.gov/sbfind.cgi', data=dict(search="Find Objects"))
     txt = r10.text
-    txt = txt.replace('<a href="sbdb.cgi', '<a href="https://ssd.jpl.nasa.gov/sbdb.cgi')
+    txt = txt.replace('<head>', '<head><base href="https://ssd.jpl.nasa.gov/">')
     return HttpResponse(txt)
 
+def jpl_redirect(req, jpl_url):
+    from django.http import HttpResponseRedirect
+    return HttpResponseRedirect('https://ssd.jpl.nasa.gov/' + jpl_url + '?' + req.META['QUERY_STRING'])
 
 # def cat_plot(req):
 #     import pylab as plt
@@ -4792,10 +4855,10 @@ def cutout_panels(req, layer=None, expnum=None, extname=None):
         img = np.hstack((img, np.zeros((H, padright), img.dtype)))
         H,W = img.shape
     if padtop:
-        img = np.vstack((np.zeros((W, padtop), img.dtype), img))
+        img = np.vstack((img, np.zeros((padtop, W), img.dtype)))
         H,W = img.shape
     if padbottom:
-        img = np.vstack((img, np.zeros((W, padbottom), img.dtype)))
+        img = np.vstack((np.zeros((padbottom, W), img.dtype), img))
         H,W = img.shape
 
     plt.imsave(jpegfn, img, **kwa)
@@ -5132,6 +5195,33 @@ def any_tile_view(request, name, ver, zoom, x, y, **kwargs):
         return HttpResponse('no such layer: ' + name)
     return layer.get_tile(request, ver, zoom, x, y, **kwargs)
 
+def any_fits_cat(req, name, **kwargs):
+    print('any_fits_cat(', name, ')')
+    name = layer_name_map(name)
+    layer = get_layer(name)
+    if layer is None:
+        return HttpResponse('no such layer: ' + name)
+    bb = get_radec_bbox(req)
+    if bb is None:
+        return HttpResponse('no ra,dec bbox')
+    ralo,rahi,declo,dechi = bb
+    return layer.get_catalog(req, ralo, rahi, declo, dechi)
+
+def get_radec_bbox(req):
+    print('get_radec_bbox()')
+    try:
+        ralo = float(req.GET.get('ralo'))
+        rahi = float(req.GET.get('rahi'))
+        declo = float(req.GET.get('declo'))
+        dechi = float(req.GET.get('dechi'))
+        print('get_radec_bbox() ->', ralo,rahi,declo,dechi)
+        return ralo,rahi,declo,dechi
+    except:
+        print('Failed to parse RA,Dec bbox:')
+        import traceback
+        traceback.print_exc()
+        return None
+
 def cutout_wcs(req, default_layer='decals-dr7'):
     from astrometry.util.util import Tan
     import numpy as np
@@ -5365,7 +5455,12 @@ if __name__ == '__main__':
     #r = c.get('/data-for-radec/?ra=54.8733&dec=-13.1156&layer=des-dr1')
     #r = c.get('/ccd/dr8/decam-767361-N29-z/')
     #r = c.get('/image-data/dr8/decam-767361-N29-z')
-    r = c.get('/')
+    #r = c.get('/')
+    #r = c.get('/jpl_lookup/?ra=346.6075&dec=-3.3056&date=2017-07-18%2007:28:16.522187&camera=decam')
+    #r = c.get('/urls')
+    #r = c.get('/dr8/1/14/16023/6558.cat.json')
+    #r = c.get('/cutout.fits?ra=212.1944&dec=4.9083&layer=dr8-south&pixscale=0.27')
+    r = c.get('/cutout_panels/dr8-south/680175/N5/?ra=5.4638&dec=22.4002&size=100')
     print('r:', type(r))
 
     f = open('out.jpg', 'wb')
